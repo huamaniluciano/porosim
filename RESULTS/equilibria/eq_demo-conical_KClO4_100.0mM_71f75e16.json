@@ -1,0 +1,14 @@
+{
+  "m_name": "demo-conical",
+  "input_dir": "/home/luchito/Escritorio/SImulaciones/porosim_v1_grego_precipitasi/POROSIM_ZENODO_TEST/RESULTS/meshes/demo-conical",
+  "n_nodos": 16658,
+  "n_celdas": 31293,
+  "c0_mM": 100.0,
+  "sigma_Cm2": -0.1602176634,
+  "rings": true,
+  "T": 298.15,
+  "eps_r": 80.0,
+  "z_p": 1.0,
+  "z_m": -1.0,
+  "films": []
+}

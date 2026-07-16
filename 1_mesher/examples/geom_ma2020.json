@@ -1,0 +1,21 @@
+{
+  "_comment": "Ma 2020-style CONICAL: short pore (100 nm), very narrow (tip 4 nm -> base 20 nm) between large 1 um reservoirs. Literature geometry used as a test.",
+  "name": "ma2020",
+  "output": "mallas/ma2020",
+  "params": {
+    "channel_type": "conical",
+
+    "L_pore": 100e-9,
+    "D_tip": 4e-9,
+    "D_base": 20e-9,
+
+    "L_res": 1000e-9,
+    "R_res": 1000e-9,
+
+    "L_charge": 40e-9,
+    "L_far": 40e-9,
+
+    "include_film_tip": false,
+    "include_film_base": false
+  }
+}

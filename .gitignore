@@ -1,0 +1,31 @@
+# ── Caches de Python y Jupyter ──
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.ipynb_checkpoints/
+
+# ── Archivos del sistema operativo ──
+.DS_Store
+Thumbs.db
+
+# ── Archivos temporales de estado de PoroSim ──
+RESULTS/.ultima_solucion.txt
+RESULTS/.ultima_malla.txt
+
+# ── Archivos de contexto / notas de diseño internas (NO se suben) ──
+# Se quedan en el disco local; sólo se excluyen del repo.
+contexto_*.txt
+
+# ── Protección de archivos binarios pesados en RESULTS ──
+# (Ignora por defecto .h5 y .msh en RESULTS para no saturar Git ni los 100MB de GitHub,
+# pero PERMITE automáticamente cualquier archivo o subcarpeta que contenga la palabra 'demo' o 'test')
+RESULTS/**/*.h5
+RESULTS/**/*.msh
+!RESULTS/**/*demo*/**
+!RESULTS/**/*test*/**
+
+# NOTA: el límite de 100 MB de GitHub NO se puede filtrar por tamaño desde acá
+# (.gitignore solo mira nombres/rutas). Lo hace el hook .githooks/pre-commit,
+# que bloquea cualquier archivo >100 MB antes del commit. Activarlo una vez con:
+#   git config core.hooksPath .githooks

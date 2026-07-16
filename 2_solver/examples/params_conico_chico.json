@@ -1,0 +1,14 @@
+{
+  "_comment": "Minimal run (~2 min): KCl 100 mM on the mesher's conico_chico mesh. Generate the mesh first (cd ../1_mallador && python launch_mallador.py ejemplos/geom_conico_chico.json) and run this from 2_solver/. Short sweep at +-0.4 V.",
+  "mesh": "../1_mallador/mallas/conico_chico/conico_chico_limites.json",
+  "params": {
+    "salt": "KCl",
+    "c0_mM": 100.0,
+
+    "sigma_e_nm2": -1.0,
+    "sigma_on_rings": true,
+
+    "V_max_V": 0.4,
+    "n_steps": 5
+  }
+}

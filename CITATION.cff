@@ -1,0 +1,11 @@
+cff-version: 1.2.0
+message: "If you use this software in your research, please cite it using the metadata below."
+title: "PoroSim: An Open-Source Modular Suite for 2D Axisymmetric Nanopore PNP Simulations"
+version: 1.0.0
+date-released: "2026-07-14"
+license: MIT
+authors:
+  - family-names: "Huamani"
+    given-names: "Angel Luciano"
+    orcid: "https://orcid.org/0009-0009-2006-9287"
+    affiliation: "Instituto de Investigaciones Fisicoquímicas Teóricas y Aplicadas (INIFTA), UNLP-CONICET, Argentina"

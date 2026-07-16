@@ -1,0 +1,56 @@
+{
+  "m_name": "demo-conical",
+  "channel_type": "conical",
+  "z_tip": 5.000000000000001e-07,
+  "z_base": 8.000000000000002e-07,
+  "R_tip": 5e-09,
+  "R_base": 2.5000000000000002e-08,
+  "L_pore": 3.0000000000000004e-07,
+  "L_res": 5.000000000000001e-07,
+  "R_res": 5.000000000000001e-07,
+  "L_charge": 5e-09,
+  "L_far": 5e-09,
+  "include_film_tip": false,
+  "include_film_base": false,
+  "tags": {
+    "AXIS": 1,
+    "WALL": 2,
+    "INLET": 3,
+    "OUTLET": 4,
+    "CHARGE_ZONE_TIP": 5,
+    "CHARGE_ZONE_BASE": 6,
+    "DOMAIN_FLUID": 10
+  },
+  "warnings": [],
+  "simulation": {
+    "salt": {
+      "name": "KClO4",
+      "cation": {
+        "symbol": "K\u207a",
+        "z": 1,
+        "D_m2s": 1.96e-09
+      },
+      "anion": {
+        "symbol": "ClO\u2084\u207b",
+        "z": -1,
+        "D_m2s": 1.79e-09
+      },
+      "soluble": false,
+      "Ksp_M2": 0.0107
+    },
+    "c0_mM": 100.0,
+    "c0_inlet_mM": 100.0,
+    "c0_outlet_mM": 100.0,
+    "sigma_Cm2": -0.1602176634,
+    "T_K": 298.15,
+    "eps_r": 80.0,
+    "V_max_V": 1.0,
+    "n_steps": 11,
+    "charge_tags": [
+      2,
+      5,
+      6
+    ],
+    "films": []
+  }
+}

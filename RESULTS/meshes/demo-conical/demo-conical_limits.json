@@ -1,0 +1,24 @@
+{
+  "m_name": "demo-conical",
+  "channel_type": "conical",
+  "z_tip": 5.000000000000001e-07,
+  "z_base": 8.000000000000002e-07,
+  "R_tip": 5e-09,
+  "R_base": 2.5000000000000002e-08,
+  "L_pore": 3.0000000000000004e-07,
+  "L_res": 5.000000000000001e-07,
+  "R_res": 5.000000000000001e-07,
+  "L_charge": 5e-09,
+  "L_far": 5e-09,
+  "include_film_tip": false,
+  "include_film_base": false,
+  "tags": {
+    "AXIS": 1,
+    "WALL": 2,
+    "INLET": 3,
+    "OUTLET": 4,
+    "CHARGE_ZONE_TIP": 5,
+    "CHARGE_ZONE_BASE": 6,
+    "DOMAIN_FLUID": 10
+  }
+}

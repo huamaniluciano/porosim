@@ -1,0 +1,21 @@
+{
+  "_comment": "Small, fast CONICAL (~30 s): the minimal example to try batch mode. Tip 20 nm -> base 100 nm, 200 nm channel.",
+  "name": "conico_chico",
+  "output": "mallas/conico_chico",
+  "params": {
+    "channel_type": "conical",
+
+    "L_pore": 200e-9,
+    "D_tip": 20e-9,
+    "D_base": 100e-9,
+
+    "L_res": 200e-9,
+    "R_res": 200e-9,
+
+    "L_charge": 20e-9,
+    "L_far": 40e-9,
+
+    "include_film_tip": false,
+    "include_film_base": false
+  }
+}

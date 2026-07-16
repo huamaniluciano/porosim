@@ -1,0 +1,29 @@
+{
+  "m_name": "demo-bullet_basefilm",
+  "channel_type": "bullet",
+  "z_tip": 1.0000000000000002e-06,
+  "z_base": 2.0000000000000003e-06,
+  "R_tip": 2.5000000000000002e-08,
+  "R_base": 1.0000000000000001e-07,
+  "L_pore": 1.0000000000000002e-06,
+  "L_res": 1.0000000000000002e-06,
+  "R_res": 1.0000000000000002e-06,
+  "L_charge": 5.0000000000000004e-08,
+  "L_far": 5.0000000000000004e-08,
+  "include_film_tip": false,
+  "include_film_base": true,
+  "tags": {
+    "AXIS": 1,
+    "WALL": 2,
+    "INLET": 3,
+    "OUTLET": 4,
+    "CHARGE_ZONE_TIP": 5,
+    "CHARGE_ZONE_BASE": 6,
+    "DOMAIN_FLUID": 10,
+    "FILM_BASE_INTERFACE": 8,
+    "DOMAIN_FILM_BASE": 12
+  },
+  "h_param": 5.000000000000001e-07,
+  "delta_film_base": 1.2000000000000002e-08,
+  "z_film_base": 2.0120000000000004e-06
+}

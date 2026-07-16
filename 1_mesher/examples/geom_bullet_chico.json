@@ -1,0 +1,22 @@
+{
+  "_comment": "Small, fast BULLET (~1 min): to see the exponential profile without waiting. The bullet keys are channel_type + h_param. Paper-size version: geom_bullet_paper.json.",
+  "name": "bullet_chico",
+  "output": "mallas/bullet_chico",
+  "params": {
+    "channel_type": "bullet",
+    "h_param": 60e-9,
+
+    "L_pore": 300e-9,
+    "D_tip": 20e-9,
+    "D_base": 100e-9,
+
+    "L_res": 200e-9,
+    "R_res": 200e-9,
+
+    "L_charge": 20e-9,
+    "L_far": 40e-9,
+
+    "include_film_tip": false,
+    "include_film_base": false
+  }
+}

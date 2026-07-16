@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "_doc": "PoroSim salt catalog. SINGLE source of truth for the properties of each electrolyte. The solver loads it, offers the list in the electrolyte step, and exports the chosen 'salt' block into the _sim.json. Adding a salt = adding an entry here; zero code. Each entry: name, cation/anion (symbol, z, D_m2s), soluble, Ksp_M2 (null if soluble).",
+  "salts": {
+    "KCl": {
+      "name": "KCl",
+      "cation": { "symbol": "K⁺",   "z":  1, "D_m2s": 1.96e-9 },
+      "anion":  { "symbol": "Cl⁻",  "z": -1, "D_m2s": 2.03e-9 },
+      "soluble": true,
+      "Ksp_M2": null
+    },
+    "KClO4": {
+      "name": "KClO4",
+      "cation": { "symbol": "K⁺",        "z":  1, "D_m2s": 1.96e-9 },
+      "anion":  { "symbol": "ClO₄⁻", "z": -1, "D_m2s": 1.79e-9 },
+      "soluble": false,
+      "Ksp_M2": 1.07e-2
+    },
+    "NaCl": {
+      "name": "NaCl",
+      "cation": { "symbol": "Na⁺",  "z":  1, "D_m2s": 1.33e-9 },
+      "anion":  { "symbol": "Cl⁻",  "z": -1, "D_m2s": 2.03e-9 },
+      "soluble": true,
+      "Ksp_M2": null
+    }
+  }
+}

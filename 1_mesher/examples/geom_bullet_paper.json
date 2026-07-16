@@ -1,0 +1,22 @@
+{
+  "_comment": "BULLET with the paper geometry (SI): rtip = 10 nm, rbase = 250 nm, L = 12 um, h = 2 um, 5 um reservoirs and 400 nm charge rings. It is the blocker-FREE counterpart of the paper meshes. NOTE: HEAVY mesh (~22 um domain with 0.2 nm elements at the wall) — it takes a while and uses a lot of RAM. To test the workflow use geom_bullet_chico.json.",
+  "name": "bullet_paper",
+  "output": "mallas/bullet_paper",
+  "params": {
+    "channel_type": "bullet",
+    "h_param": 2.0e-6,
+
+    "L_pore": 12e-6,
+    "D_tip": 20e-9,
+    "D_base": 500e-9,
+
+    "L_res": 5e-6,
+    "R_res": 5e-6,
+
+    "L_charge": 400e-9,
+    "L_far": 400e-9,
+
+    "include_film_tip": false,
+    "include_film_base": false
+  }
+}

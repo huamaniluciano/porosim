@@ -1,0 +1,10 @@
+# PoroSim Python requirements (Para entornos ya con FEniCS pre-instalado)
+numpy==2.2.6
+scipy==1.15.2
+matplotlib==3.10.8
+gmsh==4.15.1
+meshio==5.3.5
+streamlit==1.58.0
+pandas==2.3.3
+openpyxl==3.1.5
+h5py==3.16.0

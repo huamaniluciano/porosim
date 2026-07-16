@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+#
+# PoroSim — pre-commit hook: bloquea el commit si algún archivo staged supera
+# el límite duro de GitHub (100 MB / archivo). Evita el error de push por
+# archivos grandes (mallas .msh, soluciones .h5, etc.).
+#
+# Activar UNA vez por clon:   git config core.hooksPath .githooks
+#
+set -euo pipefail
+
+# 100 MiB (límite de GitHub). Bajalo si querés ser más estricto.
+LIMIT=$((100 * 1024 * 1024))
+
+too_big=""
+# Archivos agregados/modificados en el commit (con NUL como separador → paths con espacios OK)
+while IFS= read -r -d '' f; do
+    # Tamaño del contenido STAGED (lo que realmente se commitearía); fallback a stat.
+    size=$(git cat-file -s ":$f" 2>/dev/null || stat -c%s "$f" 2>/dev/null || echo 0)
+    if [ "$size" -gt "$LIMIT" ]; then
+        mb=$((size / 1024 / 1024))
+        too_big="${too_big}  ${mb} MB  ${f}"$'\n'
+    fi
+done < <(git diff --cached --name-only -z --diff-filter=AM)
+
+if [ -n "$too_big" ]; then
+    echo "" >&2
+    echo "  COMMIT BLOQUEADO — archivos por encima de 100 MB (GitHub los rechaza):" >&2
+    echo "" >&2
+    printf '%s' "$too_big" >&2
+    echo "" >&2
+    echo "  Opciones:" >&2
+    echo "    - Sacalo del commit:            git restore --staged <archivo>" >&2
+    echo "    - Ignoralo:                     agregalo al .gitignore" >&2
+    echo "    - Si de verdad querés subirlo:  usá Git LFS o un release de Zenodo" >&2
+    echo "" >&2
+    exit 1
+fi

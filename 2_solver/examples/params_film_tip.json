@@ -1,0 +1,20 @@
+{
+  "_comment": "Run with a FILM on the tip side: requires a mesh with include_film_tip=true (create it with the mesher, GUI or geom.json). The 'films' block assigns the fixed charge of each film present in the mesh; its order = ramp order. 'type' uses the catalog (0.66M/1M/2M/4M) or 'molar_charge' a free value in M. NOTE: highly charged film + dilute electrolyte may not converge -> raise n_steps and/or n_steps_film (see README).",
+  "mesh": "../1_mallador/mallas/film_demo/film_demo_limites.json",
+  "params": {
+    "salt": "KCl",
+    "c0_mM": 100.0,
+
+    "sigma_e_nm2": -1.0,
+    "sigma_on_rings": true,
+
+    "films": [
+      { "side": "tip", "type": "4M" }
+    ],
+
+    "V_max_V": 1.0,
+    "n_steps": 11,
+    "n_steps_film": 40,
+    "reuse_equilibrium": "auto"
+  }
+}

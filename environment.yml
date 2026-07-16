@@ -1,0 +1,23 @@
+name: porosim
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  # ── Núcleo científico FEniCS y Python (versiones del entorno validado) ──
+  - python=3.10.19
+  - fenics=2019.1.0
+  - mumps-mpi=5.8.1
+  - petsc=3.23.5
+  - slepc=3.23.2
+  - numpy=2.2.6
+  - scipy=1.15.2
+  - matplotlib-base=3.10.8
+  - pip
+  # ── Complementos por pip (así están instalados en el entorno validado) ──
+  - pip:
+      - gmsh==4.15.1
+      - h5py==3.16.0
+      - meshio==5.3.5
+      - streamlit==1.58.0
+      - pandas==2.3.3
+      - openpyxl==3.1.5
