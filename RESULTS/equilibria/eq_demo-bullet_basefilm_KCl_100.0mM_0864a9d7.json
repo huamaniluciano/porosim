@@ -1,6 +1,6 @@
 {
   "m_name": "demo-bullet_basefilm",
-  "input_dir": "/home/luchito/Escritorio/SImulaciones/porosim_v1_grego_precipitasi/POROSIM_ZENODO_TEST/RESULTS/meshes/demo-bullet_basefilm",
+  "input_dir": "RESULTS/meshes/demo-bullet_basefilm",
   "n_nodos": 119091,
   "n_celdas": 231884,
   "c0_mM": 100.0,

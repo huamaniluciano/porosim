@@ -42,7 +42,7 @@ replicates, and remain 100% operational.
 ## Structure
 
 ```
-POROSIM_ZENODO/
+POROSIM/
 ├─ launch_porosim.py        Multipage web portal (launches the 3 GUIs; without
 │                           Streamlit falls back to a console menu)
 ├─ portada_porosim.py       Portal home page

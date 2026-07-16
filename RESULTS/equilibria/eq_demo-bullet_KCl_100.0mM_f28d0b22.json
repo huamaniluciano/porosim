@@ -1,6 +1,6 @@
 {
   "m_name": "demo-bullet",
-  "input_dir": "/home/luchito/Escritorio/SImulaciones/porosim_v1_grego_precipitasi/POROSIM_ZENODO_TEST/RESULTS/meshes/demo-bullet",
+  "input_dir": "RESULTS/meshes/demo-bullet",
   "n_nodos": 55763,
   "n_celdas": 105319,
   "c0_mM": 100.0,
