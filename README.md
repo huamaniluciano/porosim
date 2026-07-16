@@ -1,5 +1,7 @@
 # POROSIM — Nanopore simulation suite (axisymmetric PNP)
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21402265.svg)](https://doi.org/10.5281/zenodo.21402265)
+
 Complete pipeline to simulate ionic transport in conical nanopores:
 geometry → physics → analysis. Three **pillars** chained by file contracts
 (each one consumes what the previous one produces):

@@ -4,6 +4,8 @@ title: "PoroSim: An Open-Source Modular Suite for 2D Axisymmetric Nanopore PNP S
 version: 1.0.0
 date-released: "2026-07-14"
 license: MIT
+doi: 10.5281/zenodo.21402265
+repository-code: "https://github.com/huamaniluciano/porosim"
 authors:
   - family-names: "Huamani"
     given-names: "Angel Luciano"
