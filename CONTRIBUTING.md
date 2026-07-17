@@ -32,6 +32,19 @@ If it is not a bug but a usage question ("how do I…?"), you have two options:
   with the same question.
 - Or email the maintainer directly: **huamani.luciano@quimica.unlp.edu.ar**.
 
+## Got a new module or some custom physics? We want it!
+
+I designed POROSIM from the ground up to be super easy to expand. If you've been using it for your research and added something new, please consider sharing it with the community! You don't need to be a software engineer to contribute (I'm certainly not one! 😅).
+
+### 1. Expanding the Extractor (Pillar 3)
+Did you write a custom script to compute a new observable, extract a specific integral, or create a new kind of plot? You can drop your `.py` file right into `3_extractor/modulos/` (just make sure it follows the [Standard Module Contract](3_extractor/modulos/MODULE_CONTRACT.md)). 
+The best part? The Extractor will automatically find it and plug it into both the console menu and the web GUI. You don't have to touch any GUI code at all!
+
+### 2. Adding Custom Physics (Pillar 2)
+If you simulated a system with parameters that aren't in our defaults—like a different type of electrolyte or salt—you can simply add the new JSON object into `2_solver/sales.json`. That's it! The solver will pick it up automatically without needing any Python code changes.
+
+Don't be shy—if you built something cool, open a Pull Request. We'd love to see what you're doing with POROSIM!
+
 ## Contributing code
 
 1. **Fork** the repository and create a branch for your change.
