@@ -2,7 +2,9 @@
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21402265.svg)](https://doi.org/10.5281/zenodo.21402265)
 
-Complete pipeline to simulate ionic transport in conical nanopores:
+POROSIM is a comprehensive computational suite designed to model physical chemistry phenomena in nanochannels. It solves the coupled **Poisson-Nernst-Planck (PNP)** equations for electrokinetic ionic transport and electrostatics in axisymmetric geometries using the **Finite Element Method (FEM)**. It allows for the extraction of key physical observables, including Current-Voltage (I-V) curves, 2D spatial maps (e.g., ionic concentration, electric potential), and 1D axial profiles.
+
+The suite provides a complete end-to-end pipeline to simulate ionic transport in various nanopore geometries (e.g., conical, cylindrical, bullet-shaped):
 geometry → physics → analysis. Three **pillars** chained by file contracts
 (each one consumes what the previous one produces):
 

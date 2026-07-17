@@ -16,6 +16,7 @@ RESULTS/.ultima_malla.txt
 # ── Archivos de contexto / notas de diseño internas (NO se suben) ──
 # Se quedan en el disco local; sólo se excluyen del repo.
 contexto_*.txt
+PLAN_JOSS.md
 
 # ── Protección de archivos binarios pesados en RESULTS ──
 # (Ignora por defecto .h5 y .msh en RESULTS para no saturar Git ni los 100MB de GitHub,
