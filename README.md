@@ -1,5 +1,6 @@
 # POROSIM — Nanopore simulation suite (axisymmetric PNP)
 
+[![tests](https://github.com/huamaniluciano/porosim/actions/workflows/tests.yml/badge.svg)](https://github.com/huamaniluciano/porosim/actions/workflows/tests.yml)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21402265.svg)](https://doi.org/10.5281/zenodo.21402265)
 
 POROSIM is a comprehensive computational suite designed to model physical chemistry phenomena in nanochannels. It solves the coupled **Poisson-Nernst-Planck (PNP)** equations for electrokinetic ionic transport and electrostatics in axisymmetric geometries using the **Finite Element Method (FEM)**. It allows for the extraction of key physical observables, including Current-Voltage (I-V) curves, 2D spatial maps (e.g., ionic concentration, electric potential), and 1D axial profiles.
