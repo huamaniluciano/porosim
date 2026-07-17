@@ -1,0 +1,43 @@
+name: tests
+
+# Cuándo corre: push a main y pull requests. Se saltea si el cambio es solo
+# documentación (*.md). workflow_dispatch agrega un botón para correrlo a mano.
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['**.md']
+  pull_request:
+    paths-ignore: ['**.md']
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: pytest (FEniCS legacy)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        # login shell (-l) para que `conda activate` persista entre steps.
+        shell: bash -el {0}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create the porosim env from environment.yml
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          environment-file: environment.yml     # el mismo que usás con conda
+          activate-environment: porosim         # debe coincidir con `name:` del yml
+          miniforge-version: latest             # base conda-forge + solver mamba (rápido)
+          auto-activate-base: false
+
+      - name: Sanity-check the environment
+        # Si FEniCS no instaló bien, esto FALLA acá (badge honesto), en vez de
+        # dejar que los tests se salteen en silencio y el verde quede hueco.
+        run: |
+          conda info --envs
+          python -c "import sys; print('python', sys.version.split()[0])"
+          python -c "import fenics, dolfin; print('FEniCS/dolfin', dolfin.__version__)"
+          python -c "import gmsh, meshio; print('gmsh', gmsh.__version__, '| meshio', meshio.__version__)"
+
+      - name: Run the test suite
+        run: python -m pytest -v
