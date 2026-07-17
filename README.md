@@ -154,6 +154,48 @@ POROSIM/
 Each pillar has its own `README.md` with the complete guide to its modes,
 input/output contracts and known limitations.
 
+## Known limitations and roadmap
+
+POROSIM currently solves the **steady-state**, **pure Poisson–Nernst–Planck**
+problem for a **binary 1:1 electrolyte** in a **2D axisymmetric** pore.
+
+**Physics and scope**
+
+- **Steady state only** — no time dependence yet. *(Planned: a time-dependent
+  solver, to capture memristive behavior under fast voltage sweeps.)*
+- **No fluid flow** — transport is diffusion + migration only; electro-osmotic
+  advection (a coupled velocity field) is not modeled. *(Planned: electro-osmotic
+  flow coupling.)*
+- **1:1 electrolytes only** — monovalent binary salts (KCl, NaCl, …). Asymmetric
+  valences (e.g. 2:1, CaCl₂) are not tested.
+- **No concentration gradient** — both reservoirs share one bulk concentration
+  (`c0_inlet = c0_outlet`); an imposed Δc is not implemented yet.
+
+**Numerics and convergence**
+
+- **Highly charged films are stiff** — a fixed film charge above ~2 M is very
+  hard to converge; a very charged film in a dilute electrolyte (c_fix/c0 ≳ 50)
+  can fail, or converge to a non-physical collapsed current *without* raising an
+  error. Mitigation: slower ramps (`n_steps`, `n_steps_film`) and check current
+  conservation |I_in − I_out| ≪ |I_in| at each point.
+- The voltage sweep stops at the last converged point (it does not abort).
+
+**Meshing**
+
+- **A single pre-built mesh type** — it resolves the double layer well only for a
+  matching range of Debye lengths (concentrations); for very thin double layers
+  (high concentration) it can be too coarse. *(Planned: adaptive / solver-driven
+  re-meshing.)*
+- Partial-occlusion geometries ("blocker") are not in the mesher yet.
+
+**Software / dependencies**
+
+- Built on the **legacy FEniCS 2019.1.0** (dolfin) stack, which is no longer
+  actively maintained, and runs on **Linux via conda**. *(Planned, longer term:
+  migration to the maintained FEniCSx/DOLFINx.)*
+
+Each pillar's `README.md` lists additional, finer-grained limitations.
+
 ## Contributing
 
 Bug reports, questions, and contributions are welcome. See
