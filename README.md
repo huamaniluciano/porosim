@@ -81,3 +81,10 @@ POROSIM/
 
 Each pillar has its own `README.md` with the complete guide to its modes,
 input/output contracts and known limitations.
+
+## Contributing
+
+Bug reports, questions, and contributions are welcome. See
+[CONTRIBUTING.md](CONTRIBUTING.md) for how to report a bug, ask for help, or
+submit a pull request. All participation is governed by our
+[Code of Conduct](CODE_OF_CONDUCT.md).
