@@ -18,6 +18,9 @@ geometry → physics → analysis. Three **pillars** chained by file contracts
  (.xdmf + limites)   (.h5 + _sim.json + I-V)  each solution's folder
 ```
 
+> **🤝 Open to collaborations.** POROSIM is made to be extended — if you'd like to
+> add your own analysis or physics, [here's how to get involved](CONTRIBUTING.md).
+
 ## Quickstart
 
 ### 1. Install
