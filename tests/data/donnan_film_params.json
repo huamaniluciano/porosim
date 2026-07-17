@@ -1,0 +1,11 @@
+{
+  "salt": "KCl",
+  "c0_mM": 100.0,
+  "sigma_e_nm2": 0.0,
+  "sigma_on_rings": false,
+  "films": [ { "side": "tip", "type": "2M" } ],
+  "V_max_V": 0.1,
+  "n_steps": 1,
+  "n_steps_film": 20,
+  "reuse_equilibrium": false
+}

@@ -12,6 +12,8 @@ dependencies:
   - numpy=2.2.6
   - scipy=1.15.2
   - matplotlib-base=3.10.8
+  # ── Tests (JOSS: tests automatizados) ──
+  - pytest=8.3.4
   - pip
   # ── Complementos por pip (así están instalados en el entorno validado) ──
   - pip:

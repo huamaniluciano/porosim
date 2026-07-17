@@ -1,0 +1,24 @@
+{
+  "m_name": "demo-cylinder",
+  "channel_type": "cylinder",
+  "z_tip": 2e-07,
+  "z_base": 4e-07,
+  "R_tip": 1e-08,
+  "R_base": 1e-08,
+  "L_pore": 2e-07,
+  "L_res": 2e-07,
+  "R_res": 2e-07,
+  "L_charge": 2e-08,
+  "L_far": 4e-08,
+  "include_film_tip": false,
+  "include_film_base": false,
+  "tags": {
+    "AXIS": 1,
+    "WALL": 2,
+    "INLET": 3,
+    "OUTLET": 4,
+    "CHARGE_ZONE_TIP": 5,
+    "CHARGE_ZONE_BASE": 6,
+    "DOMAIN_FLUID": 10
+  }
+}

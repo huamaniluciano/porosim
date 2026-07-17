@@ -1,0 +1,9 @@
+{
+  "salt": "KCl",
+  "c0_mM": 100.0,
+  "sigma_e_nm2": -1.0,
+  "sigma_on_rings": true,
+  "V_max_V": 0.2,
+  "n_steps": 3,
+  "reuse_equilibrium": false
+}
