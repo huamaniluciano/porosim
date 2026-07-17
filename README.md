@@ -100,10 +100,9 @@ replicates, and remain 100% operational.
 
 ```
 POROSIM/
-├─ launch_porosim.py        Multipage web portal (launches the 3 GUIs; without
-│                           Streamlit falls back to a console menu)
-├─ portada_porosim.py       Portal home page
-├─ 1_mesher/              Geometry and meshing (gmsh + meshio; NO FEniCS)
+│
+│  ─── The three pillars (the pipeline itself) ───
+├─ 1_mesher/                Geometry and meshing (gmsh + meshio; NO FEniCS)
 │  ├─ capa1..capa4_*.py     Core: model → loops → gmsh → mesh
 │  ├─ gui_*.py              Web GUI
 │  ├─ launch_mallador.py    Launcher (GUI / batch)
@@ -120,8 +119,29 @@ POROSIM/
 │  ├─ gui_extractor_app.py  Web GUI (imports the modules: single source)
 │  ├─ launch_extractor.py   GUI launcher
 │  ├─ console_backup/extractor.py  Console menus equivalent to the GUI
-│  └─ resumen_solucion/     Text report of a run
-└─ RESULTS/              Shared I/O (meshes, equilibria, solutions)
+│  └─ solution_summary/     Text report of a run
+│
+│  ─── Entry points and shared I/O ───
+├─ launch_porosim.py        Multipage web portal (launches the 3 GUIs; without
+│                           Streamlit falls back to a console menu)
+├─ portada_porosim.py       Portal home page
+├─ RESULTS/                 Shared I/O (meshes, equilibria, solutions)
+│
+│  ─── Install ───
+├─ environment.yml          Conda environment (FEniCS + gmsh + ...) — the recipe
+├─ requirements.txt         pip deps (for environments that already have FEniCS)
+│
+│  ─── Tests and CI (for maintainers; users can ignore) ───
+├─ tests/                   Automated test suite  (run: python -m pytest)
+├─ pytest.ini               pytest configuration
+├─ .github/workflows/       Continuous integration (runs the tests on GitHub)
+│
+│  ─── Project metadata (standard open-source files) ───
+├─ README.md                This file
+├─ LICENSE                  MIT license
+├─ CITATION.cff             How to cite POROSIM
+├─ CONTRIBUTING.md          How to report bugs, ask for help, contribute
+└─ CODE_OF_CONDUCT.md       Community conduct guidelines
 ```
 
 ## Dependencies
