@@ -18,6 +18,58 @@ geometry → physics → analysis. Three **pillars** chained by file contracts
  (.xdmf + limites)   (.h5 + _sim.json + I-V)  each solution's folder
 ```
 
+## Quickstart
+
+### 1. Install
+
+POROSIM runs on Linux with a conda environment (it uses the legacy FEniCS
+2019.1.0 stack). From the repository root:
+
+```bash
+# On a minimal or headless Linux, install the system libraries gmsh links
+# against (already present on most desktops; Debian/Ubuntu shown):
+sudo apt-get install -y libglu1-mesa libgl1 libxrender1 libxcursor1 libxft2 libxinerama1
+
+# Create and activate the environment (installs FEniCS, gmsh, ...; this can
+# take several minutes):
+conda env create -f environment.yml
+conda activate porosim
+```
+
+To confirm the install, run the test suite (under a minute):
+
+```bash
+python -m pytest        # expect: 31 passed
+```
+
+### 2. Run the full pipeline on the small example
+
+This chains the three pillars on a small conical pore (KCl 100 mM). The whole
+run takes well under a minute.
+
+```bash
+# 1. Mesh — build the geometry (~5 s)
+cd 1_mesher
+python launch_mallador.py examples/geom_conico_chico.json
+#   -> 1_mesher/mallas/conico_chico/   (<name>_domain.xdmf, _facets.xdmf, _limits.json)
+
+# 2. Solve — the PNP physics on that mesh (~5 s)
+cd ../2_solver
+python solver.py examples/params_conico_chico.json --mesh ../1_mesher/mallas/conico_chico
+#   -> RESULTS/solutions/conico_chico_KCl_100.0mM/   (Solutions_*.h5 + I-V table)
+
+# 3. Extract — a 2D potential map at +0.4 V, plus its numerical data
+cd ../3_extractor
+python launch_extractor.py \
+    ../RESULTS/solutions/conico_chico_KCl_100.0mM/Solutions_conico_chico_KCl_100.0mM.h5 \
+    potential --voltage 0.4 --save-data
+#   -> the PNG lands next to the solution, in that same folder
+```
+
+You now have a mesh, an I-V curve, and a potential-map figure. For the
+interactive GUIs instead of the batch commands, run any launcher without
+arguments (see below).
+
 ## How to use it
 
 **Web portal (recommended)** — a single multipage app with the GUIs of the
