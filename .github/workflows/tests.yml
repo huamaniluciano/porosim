@@ -22,13 +22,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install system libraries gmsh needs (headless runner)
+        # gmsh links against OpenGL/X even in batch mode; the bare runner lacks
+        # these .so files (e.g. libGLU.so.1), so `import gmsh` fails without them.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libglu1-mesa libgl1 libxrender1 libxcursor1 libxft2 libxinerama1
+
       - name: Create the porosim env from environment.yml
         uses: conda-incubator/setup-miniconda@v3
         with:
           environment-file: environment.yml     # el mismo que usás con conda
           activate-environment: porosim         # debe coincidir con `name:` del yml
           miniforge-version: latest             # base conda-forge + solver mamba (rápido)
-          auto-activate-base: false
 
       - name: Sanity-check the environment
         # Si FEniCS no instaló bien, esto FALLA acá (badge honesto), en vez de
