@@ -21,8 +21,11 @@ precipitation, pH and memristor papers. Runs written by v1.0.0 (`.h5`,
   `tol_voltage_rel` reproduce v1.0.0 runs, a `newton_few_iterations` warning
   flags steps that converge in fewer than 2 iterations, and a new test checks
   that two voltage steps give the same currents. **Curves computed with v1.0.0
-  should be recomputed**, and the golden I-V of the regression test is
-  regenerated with `python tests/regenerate_golden.py`.
+  should be recomputed.** The golden I-V of the regression test was
+  regenerated (`python tests/regenerate_golden.py`): its currents move by 0.4
+  to 8.5 %, and the old ±0.1 V points, exactly symmetric, were the linear
+  response of a single Newton step. With the v1.0.0 tolerances the v1.1.0
+  solver gives the old golden to the last printed digit.
 - **Solver: asymmetric salts had a charged bulk.** A 2:1 salt such as CaCl₂
   got c0 on both ions; it now runs with its neutral stoichiometry
   (Ca²⁺ c0, Cl⁻ 2·c0).
