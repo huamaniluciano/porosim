@@ -144,6 +144,7 @@ POROSIM/
 ├─ README.md                This file
 ├─ LICENSE                  MIT license
 ├─ CITATION.cff             How to cite POROSIM
+├─ CHANGELOG.md             What changed in each version
 ├─ CONTRIBUTING.md          How to report bugs, ask for help, contribute
 └─ CODE_OF_CONDUCT.md       Community conduct guidelines
 ```

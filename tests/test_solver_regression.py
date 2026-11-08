@@ -8,6 +8,10 @@ fixture (see conftest.py), reused by the T4 physics-validation tests. This
 formalizes the "digit-by-digit" regression check done by hand during refactors:
 if a formula in motor_pnp.py changes, the currents shift and this test fails.
 
+When the physics or the numerics change ON PURPOSE, regenerate the golden on
+a machine with FEniCS with `python tests/regenerate_golden.py` (it shows the
+old and new currents first) and commit it with that change.
+
 The run is deterministic on a given machine (direct MUMPS solver, no
 randomness). The tolerance (rtol=1e-4) absorbs minor cross-platform numeric
 noise yet is far tighter than any real formula change (which shifts currents by
