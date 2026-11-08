@@ -135,14 +135,16 @@ def dibujar_lineas_campo(ax, Z, R, Ez, Er, density=0.7, color="0.55",
     devuelve trayectorias distintas arriba y abajo (medido: 20 contra 17, ~6 %
     de diferencia de largo). Acá se integra SOLO en r ≥ 0 (con Er = 0 en el eje
     ninguna línea puede cruzarlo, ver campo_electrico) y cada trayectoria se
-    dibuja además reflejada. Rinde ~el doble de líneas por unidad de density
-    que un streamplot sobre la ventana entera.
+    dibuja además reflejada.
+
+    density es la de streamplot sobre la MEDIA ventana (su grilla interna
+    tiene 30·density celdas por lado): (d, d/2) da la misma separación entre
+    líneas que un streamplot de density d sobre la ventana entera.
 
     Las flechas se ponen a mano en el medio de cada trayectoria: las de
     streamplot son patches en coordenadas de PANTALLA y no se pueden espejar.
-    Cada flecha es un patch, así que en el dominio completo (cientos de líneas)
-    esto es lento: crear_figura lo usa solo en los zooms, donde la asimetría
-    se ve.
+    También son un patch por línea (streamplot hace lo mismo), así que el
+    costo es el de un streamplot sobre la ventana entera.
     """
     import matplotlib.patches as mpatches
     from matplotlib.collections import LineCollection
@@ -222,14 +224,12 @@ def crear_figura(datos, ctx, con_campo=False, leyenda=True,
     ax.set_xlim(*(xlim if xlim is not None else (z2.min(), z2.max())))
 
     if ec is not None:
-        if es_zoom:
-            # En el zoom se ve la asimetría de streamplot: integrar media
-            # ventana y espejar (ver dibujar_lineas_campo).
-            dibujar_lineas_campo(ax, ec["Z"], ec["R_full"], ec["Ez"], ec["Er"])
-        else:
-            ax.streamplot(ec["Z"], ec["R_full"], ec["Ez"], ec["Er"],
-                          color="0.55", density=1.4, linewidth=0.8,
-                          arrowsize=1.0, arrowstyle="->")
+        # Media ventana integrada y espejada (ver dibujar_lineas_campo): un
+        # streamplot sobre el plano entero sale asimétrico, con o sin zoom.
+        # Sin zoom, (1.4, 0.7) = la separación del streamplot de v1.0.0
+        # (density 1.4 sobre el plano entero).
+        dibujar_lineas_campo(ax, ec["Z"], ec["R_full"], ec["Ez"], ec["Er"],
+                             density=0.7 if es_zoom else (1.4, 0.7))
     cbar = fig.colorbar(im, ax=ax)
     cbar.set_label("Potential [V]" if phi_ref is None
                    else f"Potential [V]  (fixed scale ±{float(phi_ref):g} V)")

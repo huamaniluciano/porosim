@@ -8,7 +8,7 @@ the fixes ported from the paper copies (ARREGLOS PARA POROSIM/PORTABLE_FIXES.md)
 
   F3  Er = 0 on the symmetry axis and an exactly odd Er(r)
   F5  a zoom window gets its own field grid (it used to contain ~1 node)
-  F4  zoomed field lines are drawn in exact mirror pairs
+  F4  field lines are drawn in exact mirror pairs, zoomed or not
   F7  without zoom the axes end at the data, with no autoscale padding
   F2  colorbar ticks never fall outside the bar
   F8  limpiar_figura() keeps the frame and the tick marks
@@ -141,14 +141,15 @@ def test_full_view_ends_at_the_data(ctx_demo):
     plt.close(fig)
 
 
-def test_zoomed_field_lines_come_in_mirror_pairs(ctx_demo):
+@pytest.mark.parametrize("ventana", [{"xlim": (440.0, 560.0), "ylim": (-50.0, 50.0)}, {}],
+                         ids=["zoom", "full_view"])
+def test_field_lines_come_in_mirror_pairs(ctx_demo, ventana):
     from matplotlib.collections import LineCollection
     d = _campo_sintetico()
-    fig = potential.crear_figura(d, ctx_demo, con_campo=True,
-                                 xlim=(440.0, 560.0), ylim=(-50.0, 50.0))
+    fig = potential.crear_figura(d, ctx_demo, con_campo=True, **ventana)
     ax = fig.axes[0]
     colecciones = [c for c in ax.collections if isinstance(c, LineCollection)]
-    assert colecciones, "zoomed figure has no field lines"
+    assert colecciones, "figure has no field lines"
     segmentos = [s for c in colecciones for s in c.get_segments() if len(s) > 1]
     assert len(segmentos) >= 4
 

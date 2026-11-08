@@ -42,7 +42,11 @@ precipitation, pH and memristor papers. Runs written by v1.0.0 (`.h5`,
   field there); zoomed views compute the field on the zoom window (they used to
   have about one grid node, so no field lines), with the interpolator built on
   the window only (~90× faster on a 650k-node mesh);
-  zoomed field lines are exactly symmetric; no colour jump at the end of the
+  field lines are exactly symmetric, zoomed or not (matplotlib's streamplot
+  drew the two halves differently even for an exactly symmetric field: in the
+  full view of the demos about 30 % of the drawn length had no mirror image;
+  now the lines are traced on r ≥ 0 and mirrored, at the same cost and
+  spacing); no colour jump at the end of the
   colorbar; colorbar ticks never fall outside the bar; axes end at the data;
   clean exports keep the frame and the tick marks.
 - **Extractor: the cross-section average crashed with NumPy ≥ 2.4**
