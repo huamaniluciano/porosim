@@ -4,7 +4,7 @@ All notable changes to POROSIM. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [semantic versioning](https://semver.org/).
 
-## [1.1.0] - Unreleased
+## [1.1.0] - 2026-11-08
 
 Fixes and features gathered from the copies of the code used for the
 precipitation, pH and memristor papers. Runs written by v1.0.0 (`.h5`,
