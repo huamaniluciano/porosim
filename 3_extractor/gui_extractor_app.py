@@ -7,8 +7,10 @@
 ═══════════════════════════════════════════════════════════════════════════
 
 Dashboard científico sobre una SOLUCIÓN del solver (Pilar 2):
-  · Pestaña A — Barrido completo: curva I-V, factor de rectificación a ±1 V
-    y conductancia diferencial dI/dV (de la tabla IV_curve_*.txt); en sales
+  · Pestaña A — Barrido completo: curva I-V, métricas de la curva (f_rec,
+    G0, exponente n y S-index de cada rama, pendiente local; módulo
+    iv_metrics) y conductancia diferencial dI/dV (de la tabla
+    IV_curve_*.txt); en sales
     poco solubles, el voltaje de aparición de precipitado (max Q_act/Ksp vs V).
   · Pestaña B — Física interna a un voltaje: perfiles axiales (r=0) de φ y
     concentraciones, mapas 2D de potencial (± líneas de campo), iones
@@ -29,7 +31,8 @@ import pathlib
 # ─── porosim_comun prepara el entorno FEniCS (MPI/UCX/threads) ──────────────
 AQUI = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(AQUI / "modulos"))
-for _cat in ("potential_map", "ion_maps", "precipitation_map", "axial_profiles"):
+for _cat in ("potential_map", "ion_maps", "precipitation_map", "axial_profiles",
+             "iv_analysis"):
     sys.path.insert(0, str(AQUI / "modulos" / _cat))
 
 import importlib
@@ -54,6 +57,7 @@ import ions
 import total_ions
 import axis_profile_potential as perf_pot
 import axis_profile_ions as perf_ion
+import iv_metrics
 perf_prom = importlib.import_module("section_avg_concentration")
 
 try:
@@ -415,28 +419,37 @@ with tab_global:
                    "I cannot show the I-V curve or dI/dV.")
     else:
         V_arr, I_in, I_out = iv[:, 0], iv[:, 1], iv[:, 2]
+        I_med = 0.5 * (I_in + I_out)
+        met = iv_metrics.metricas(V_arr, I_med)
+
+        def _fmt(x, fmt):
+            return "—" if x is None else format(x, fmt)
 
         col_m1, col_m2, col_m3 = st.columns(3)
         col_m1.metric("Sweep points", f"{len(V_arr)}")
         col_m2.metric("Voltage range", f"{V_arr.min():+.2f} … {V_arr.max():+.2f} V")
-
-        v_pos = V_arr[V_arr > 1e-9]
-        v_neg = V_arr[V_arr < -1e-9]
-        if len(v_pos) and len(v_neg):
-            v1 = v_pos[np.argmin(np.abs(v_pos - 1.0))]
-            v2 = v_neg[np.argmin(np.abs(v_neg + 1.0))]
-            i1 = I_in[np.argmin(np.abs(V_arr - v1))]
-            i2 = I_in[np.argmin(np.abs(V_arr - v2))]
-            if abs(i2) > 1e-12:
-                col_m3.metric(f"Rectification factor ({v1:+.2f}/{v2:+.2f} V)",
-                              f"{i1 / abs(i2):.2f}",
-                              help="r_f = I(+1 V) / |I(−1 V)| on the Inlet "
-                                   "current, at the available voltage closest to ±1 V.")
-            else:
-                col_m3.metric("Rectification factor", "—")
+        if met["f_rec"] is not None:
+            col_m3.metric(f"Rectification factor ({met['v_ref_pos']:+.2f}/"
+                          f"{met['v_ref_neg']:+.2f} V)", f"{met['f_rec']:.2f}",
+                          help="f_rec = |I(+1 V) / I(−1 V)| at the available voltages "
+                               "closest to ±1 V, with I = (I_in + I_out)/2.")
         else:
             col_m3.metric("Rectification factor", "—",
                           help="The sweep does not have both branches (+ and −).")
+        a_n, b_n = met["ventana_n"]
+        cn = st.columns(5)
+        cn[0].metric("G0", f"{_fmt(met['G0_nS'], '.3g')} nS",
+                     help=f"Slope of I(V) for |V| ≤ {met['v_g0']:g} V.")
+        for col, rama in ((cn[1], "pos"), (cn[2], "neg")):
+            col.metric(f"n ({'+' if rama == 'pos' else '−'}V)", _fmt(met[f"n_{rama}"], ".3f"),
+                       help=f"d ln|I| / d ln|V| fitted on {a_n:g}–{b_n:g} V: > 1 "
+                            "superlinear (rectifying), 1 ohmic, < 1 sublinear (S shape). "
+                            "— if the sweep has no points in that window.")
+        for col, rama in ((cn[3], "pos"), (cn[4], "neg")):
+            col.metric(f"S-index ({'+' if rama == 'pos' else '−'}V)",
+                       _fmt(met[f"S_index_{rama}"], ".3f"),
+                       help="G(±1 V) / max G(0 < |V| ≤ 1 V), G = I/V: 1 without "
+                            "an S shape, < 1 if the conductance drops at high |V|.")
 
         def dibujar_iv(leyenda, limpio):
             fig, ax = plt.subplots(figsize=(9, 5))
@@ -461,6 +474,26 @@ with tab_global:
                                             "I_out_nA": I_out}),
                         "header": f"Curva I-V | {stem}"}
         panel_grafico("iv", dibujar_iv, carpeta_sol, f"{stem}_IV_curve", datos_iv)
+
+        st.divider()
+
+        st.markdown("#### I-V metrics: local slope d ln|I| / d ln|V|")
+        datos_met = {"V": V_arr, "I_in": I_in, "I_out": I_out, "I": I_med}
+
+        def dibujar_metricas(leyenda, limpio):
+            return iv_metrics.crear_figura(datos_met, ctx, leyenda=leyenda,
+                                           titulo=not limpio)
+
+        datos_pend = None
+        if pd is not None:
+            pend = iv_metrics.pendiente_local(V_arr, I_med)
+            filas = sorted((s_ * v, n) for clave, s_ in (("-", -1), ("+", 1))
+                           for v, n in zip(*pend[clave]))
+            datos_pend = {"df": pd.DataFrame({"Voltage_V": [f[0] for f in filas],
+                                              "local_slope": [f[1] for f in filas]}),
+                          "header": f"local slope d ln|I| / d ln|V| | {stem}"}
+        panel_grafico("ivmet", dibujar_metricas, carpeta_sol,
+                      f"{stem}_IV_metrics", datos_pend)
 
         st.divider()
 
@@ -511,6 +544,8 @@ with tab_global:
                 lineas_rep.append(f"Geometry: D_tip = {meta['R_tip']*2e9:.1f} nm, D_base = {meta.get('R_base', 0)*2e9:.1f} nm, L = {meta.get('L_pore', 0)*1e9:.0f} nm")
             lineas_rep.append(f"Points in I-V sweep: {len(V_arr)}")
             lineas_rep.append(f"Voltage range: {V_arr.min():+.2f} V … {V_arr.max():+.2f} V")
+            lineas_rep.append("\n=== I-V METRICS (I = (I_in + I_out)/2) ===")
+            lineas_rep += [l.replace("\t", "  ") for l in iv_metrics.texto_metricas(met)]
             texto_reporte = "\n".join(lineas_rep) + "\n\n=== TABLA I-V ===\n" + (
                 pd.DataFrame({"V_applied_V": V_arr, "I_in_nA": I_in, "I_out_nA": I_out}).to_string(index=False)
                 if pd is not None else ""

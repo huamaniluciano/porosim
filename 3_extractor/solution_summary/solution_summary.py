@@ -556,6 +556,30 @@ def _imprimir_reporte(nombre_solucion, meta, ruta_solucion):
     _imprimir_simulacion(meta)
     _imprimir_films(meta)
     _imprimir_mallado(meta, ruta_solucion)
+    _imprimir_metricas_iv(ruta_solucion)
+
+
+def _imprimir_metricas_iv(ruta_solucion):
+    """Métricas de la curva I-V (módulo iv_analysis/iv_metrics, v1.1.0)."""
+    ruta_iv = _buscar_curva_iv(pathlib.Path(ruta_solucion))
+    if ruta_iv is None:
+        return
+    try:
+        _pc()                                   # deja modulos/ en sys.path
+        carpeta = str(pathlib.Path(__file__).resolve().parents[1]
+                      / "modulos" / "iv_analysis")
+        if carpeta not in sys.path:
+            sys.path.insert(0, carpeta)
+        import iv_metrics
+        datos = iv_metrics.cargar_iv(ruta_iv)
+        lineas = iv_metrics.texto_metricas(iv_metrics.metricas(datos["V"], datos["I"]))
+    except Exception as e:
+        print(f"\n[NOTE] Could not compute the I-V metrics: {e}")
+        return
+    print("\n--- I-V METRICS (I = (I_in + I_out)/2; module iv_metrics) ---")
+    for linea in lineas:
+        clave, valor, *nota = linea.split("\t")
+        print(f"  {clave:<14} {valor:>10}   {nota[0] if nota else ''}".rstrip())
 
 
 def preparar(ruta_solucion, v_label=None, sol=None):

@@ -78,6 +78,8 @@ def _recorrer_vistas(at):
 
 def test_gui_binary_demo(repo_root, fenics_stub):
     at = _abrir(repo_root, repo_root / _DEMO / f"Solutions_{_STEM_DEMO}.h5")
+    etiquetas = {str(m.label) for m in at.metric}            # I-V metrics (v1.1.0)
+    assert {"G0", "n (+V)", "n (−V)", "S-index (+V)", "S-index (−V)"} <= etiquetas
     vistas, modos = _recorrer_vistas(at)
     assert len(vistas) == 4 and any("Precipitation" in v for v in vistas)
     assert len(modos) == 3

@@ -88,8 +88,8 @@ sparingly soluble salts). The menu hides it; BATCH SKIPS it. Without `aplica()`
 
 **`USA_VOLTAJE = False`**
 Global modules that analyze the full sweep (`solution_summary`,
-`precipitation_onset`): `preparar()` ignores `v_label` and batch does not
-require `--voltage`. A global module that reads the fields of every voltage
+`precipitation_onset`, `iv_metrics`): `preparar()` ignores `v_label` and batch
+does not require `--voltage`. A global module that reads the fields of every voltage
 loads the solution once (`pc.cargar_solucion`) and keeps only what it plots
 (see `precipitation_onset.calcular_barrido`).
 

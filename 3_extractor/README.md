@@ -84,6 +84,7 @@ modulos/
 ├─ ion_maps/        ions.py (2D c₊ and c₋) · total_ions.py
 ├─ precipitation_map/ precipitation.py (precipitation zone, Davies) ·
 │                      precipitation_onset.py (max Q_act/Ksp vs V, global)
+├─ iv_analysis/       iv_metrics.py (f_rec, G0, n, S-index, local slope; global)
 └─ axial_profiles/         axis_profile_potential · axis_profile_ions ·
                        section_avg_concentration  (axial profiles r=0)
 solution_summary/solution_summary.py   (run summary)
@@ -148,6 +149,25 @@ live only once and are consumed by both the console and the GUI:
 **To change how an analysis looks or is computed**, edit its module (or
 `porosim_comun.py` if it is cross-cutting): the change shows up in the console
 and the GUI without touching anything else.
+
+## I-V metrics (`iv_metrics`, v1.1.0)
+
+Global module that reads only the `IV_curve_*.txt` table (no FEniCS, any
+electrolyte), with I = (I_in + I_out)/2:
+
+| Metric | Definition |
+|---|---|
+| `f_rec` | \|I(+1 V) / I(−1 V)\| (closest table voltages) |
+| `G0` | slope of I(V) for \|V\| ≤ 0.1 V [nS] |
+| `n±` | d ln\|I\| / d ln\|V\| fitted on 0.7–1 V on each branch: > 1 superlinear (rectifying), 1 ohmic, < 1 sublinear (S shape) |
+| `S-index±` | G(1 V) / max G(0 < \|V\| ≤ 1 V), G = I/V: 1 without an S shape |
+
+They are the metrics of the rectification and S-shape analysis of the
+precipitation paper. Batch: `{stem}_IV_metrics.txt` always, the figure (I-V +
+local slope of each branch), and the local slope table with `--save-data`;
+`--opt v_ref=0.5 --opt ventana_n=0.3,0.5 --opt v_g0=0.05` adapt them to shorter
+sweeps (a metric with no data in its window is reported as `n/a`). The GUI shows
+them under the I-V curve, and `solution_summary` adds them to its report.
 
 ## Precipitation (sparingly soluble salts)
 

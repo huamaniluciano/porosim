@@ -43,7 +43,7 @@ To confirm the install, run the test suite (a few minutes; `-m "not slow"`
 skips the solver runs and takes seconds):
 
 ```bash
-python -m pytest        # expect: 99 passed
+python -m pytest        # expect: 105 passed
 ```
 
 ### 2. Run the full pipeline on the small example
@@ -158,10 +158,39 @@ POROSIM/
 Each pillar has its own `README.md` with the complete guide to its modes,
 input/output contracts and known limitations.
 
+## Validation
+
+**Against COMSOL Multiphysics 6.4.** The same pore was solved with COMSOL's
+standard Nernst–Planck–Poisson interfaces (Transport of Diluted Species with
+migration + Electrostatics): a bullet-shaped channel with r_tip = 10 nm,
+r_base = 250 nm, a 12 µm membrane and 5 µm reservoirs, σ = −1.5 e/nm² on the
+wall and on 400 nm charged crowns on both membrane faces, KCl 100 mM, ±1 V in
+0.05 V steps. The metrics are the ones of the extractor's `iv_metrics` module
+(n = d ln I / d ln V fitted on 0.7–1 V, f_rec = |I(+1 V)/I(−1 V)|):
+
+| | n (0.7–1 V) | I(+1 V) [nA] | I(−1 V) [nA] | f_rec |
+|---|---|---|---|---|
+| POROSIM | 1.463 | 18.84 | −2.80 | 6.74 |
+| COMSOL, 58k elements | 1.461 | 18.79 | −2.76 | 6.80 |
+| COMSOL, 173k elements | 1.462 | 18.69 | −2.78 | 6.73 |
+
+The currents agree within ~1 %, the size of POROSIM's own current-conservation
+error in that run (I_in vs I_out, 0.93 %), and n within 0.002. Refining the
+COMSOL mesh moves its currents by ±0.5 % and leaves n unchanged. With a
+partially occluding deposit in the channel (the "blocker" geometries planned
+for v1.2) the agreement is within 2 % on the fine COMSOL mesh.
+
+**Against physics, in the test suite** (`tests/`, marked `slow`): inlet/outlet
+current conservation, bulk electroneutrality, the analytical Donnan potential of
+a charged film, the ohmic conductance of an uncharged cylinder, an I-V that does
+not depend on the voltage step (v1.1.0), and a salt mixture that reproduces the
+equivalent binary salt (v1.1.0).
+
 ## Known limitations and roadmap
 
 POROSIM currently solves the **steady-state**, **pure Poisson–Nernst–Planck**
-problem for a **binary 1:1 electrolyte** in a **2D axisymmetric** pore.
+problem in a **2D axisymmetric** pore, for a binary salt or (since v1.1.0) a
+mixture of salts.
 
 **Physics and scope**
 
@@ -170,8 +199,13 @@ problem for a **binary 1:1 electrolyte** in a **2D axisymmetric** pore.
 - **No fluid flow** — transport is diffusion + migration only; electro-osmotic
   advection (a coupled velocity field) is not modeled. *(Planned: electro-osmotic
   flow coupling.)*
-- **1:1 electrolytes only** — monovalent binary salts (KCl, NaCl, …). Asymmetric
-  valences (e.g. 2:1, CaCl₂) are not tested.
+- **Electrolytes** — binary salts (KCl, NaCl, …) are the validated case. Since
+  v1.1.0 the solver also takes mixtures of salts (N ions, e.g. KCl + HCl) and
+  asymmetric salts (2:1, CaCl₂) with their neutral stoichiometry; the mixture is
+  tested against the equivalent binary salt, but asymmetric valences have no
+  physics validation yet. The extractor draws the potential, the I-V and its
+  metrics for any electrolyte; the concentration and precipitation views need a
+  binary salt.
 - **No concentration gradient** — both reservoirs share one bulk concentration
   (`c0_inlet = c0_outlet`); an imposed Δc is not implemented yet.
 

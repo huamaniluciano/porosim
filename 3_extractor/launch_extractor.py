@@ -43,6 +43,7 @@ Modules (contract in modulos/MODULE_CONTRACT.md):
   precipitation_map : precipitation zone and onset voltage (only sparingly
                       soluble salts)
   axial_profiles       : axial profiles (potential, ions, section average)
+  iv_analysis       : I-V metrics (f_rec, G0, n, S-index, local slope)
   + solution_summary/solution_summary.py (run summary)
 
 Requires FEniCS (dolfin 2019.1.0) + matplotlib + numpy. The GUI adds
