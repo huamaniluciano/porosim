@@ -21,12 +21,19 @@ python launch_extractor.py <solution> <module> --voltage -1.0
 python launch_extractor.py <solution> <module> --voltage -1.0 --save-data     # + .txt/.xlsx
 python launch_extractor.py <solution> <module> --voltage all                  # full sweep
 python launch_extractor.py <solution> solution_summary                        # does not use --voltage
-python launch_extractor.py list                  # lists the available modules
+python launch_extractor.py <solution> precipitation --voltage 1.0 --opt factor=10 --opt estilo=ternary
+python launch_extractor.py <solution> precipitation_onset --save-data         # reads every voltage
+python launch_extractor.py list                  # lists the modules and their --opt options
 ```
 
 `--voltage` accepts a value (`-1.0`), a list (`-1.0,0.0,0.5`) or `all`; the
 mesh is loaded **only once** for the whole sweep. `<solution>` can be the
-`Solutions_*.h5` or its folder.
+`Solutions_*.h5` or its folder. `--opt key=value` (repeatable, v1.1.0) passes
+an option to the module's `guardar()`: the options of each module are the
+extra keyword parameters of its `guardar()`, and `list` prints them with their
+defaults. A name that is not one of them aborts with the list of valid ones.
+Values are read as numbers, `true`/`false`, `none`, or comma tuples
+(`ylim=-500,500`).
 
 ## File map
 
@@ -73,7 +80,8 @@ modulos/
 ├─ porosim_comun.py    shared layer (FEniCS loading + helpers + decoration)
 ├─ potential_map/     potential.py (2D φ map) · field_lines.py (E = −∇φ)
 ├─ ion_maps/        ions.py (2D c₊ and c₋) · total_ions.py
-├─ precipitation_map/ precipitation.py (precipitation zone, Davies)
+├─ precipitation_map/ precipitation.py (precipitation zone, Davies) ·
+│                      precipitation_onset.py (max Q_act/Ksp vs V, global)
 └─ axial_profiles/         axis_profile_potential · axis_profile_ions ·
                        section_avg_concentration  (axial profiles r=0)
 solution_summary/solution_summary.py   (run summary)
@@ -139,6 +147,29 @@ live only once and are consumed by both the console and the GUI:
 `porosim_comun.py` if it is cross-cutting): the change shows up in the console
 and the GUI without touching anything else.
 
+## Precipitation (sparingly soluble salts)
+
+Both modules use the same activities (Davies, ionic strength capped at 0.5 M)
+and the same threshold: a node precipitates where `Q_act = γ±²·c₊·c₋ > S·Ksp`.
+`S` is a parameter since v1.1.0 (`--opt factor=10` in batch, a number field in
+the GUI and the console); its default `FACTOR_PAPER = 2.0` is the one of the
+v1.0.0 figures (see [`PENDIENTES.md`](PENDIENTES.md)). With `Ω = Q_act/Ksp`:
+
+- **`precipitation`** (one voltage) draws the map in three styles
+  (`--opt estilo=`): `binary` (precipitates / soluble, the v1.0.0 map and file
+  name), `ternary` (adds the supersaturated band that does not reach the
+  threshold, `1 < Ω ≤ S`) and `log10` (continuous `log₁₀ Ω` on a fixed ±3
+  decade scale, with the `Ω = 1` and `Ω = S` contours). Files:
+  `{stem}_precipitation_{V}V_f{S}.png`, `{stem}_saturation_ternary_{V}V_f{S}.png`,
+  `{stem}_saturation_log10_{V}V_f{S}.png`; `--save-data` writes the node counts
+  (precipitating, supersaturated, max Ω).
+- **`precipitation_onset`** (global, no `--voltage`) reads every voltage once
+  and plots max Ω over the domain vs V, with the threshold and the onset
+  voltage of each polarity (first |V| where max Ω crosses S, interpolated
+  between computed voltages). `--opt v_read=0.4` shades |V| ≤ V_read. Files:
+  `{stem}_precipitation_onset_f{S}.png` (+ the V, max Ω table with
+  `--save-data`). In the GUI it is the last section of the full-sweep tab.
+
 ## Outputs
 
 Everything is saved in the **solution folder**. In console mode, each module
@@ -147,8 +178,8 @@ directly (PNG always; numerical data with `--save-data`).
 
 The **2D maps** are exported in a **clean** version (only the domain content,
 without axes or title) with **the numerical scale bar** (labeled colorbar) so
-that the figure is interpretable on its own; the precipitation map (binary)
-carries the soluble/precipitates legend. The **1D profiles** are exported as a
+that the figure is interpretable on its own; the precipitation map carries the
+legend of its classes (binary/ternary) or its log₁₀ Ω colorbar. The **1D profiles** are exported as a
 full figure (with axes) and their data to `.txt` (and `.xlsx` for the ions
 one). `solution_summary` saves the I-V curve, the channel schematic and the
 report as `.txt`. Frozen style decisions: see [`PENDIENTES.md`](PENDIENTES.md).

@@ -39,10 +39,11 @@ conda env create -f environment.yml
 conda activate porosim
 ```
 
-To confirm the install, run the test suite (under a minute):
+To confirm the install, run the test suite (a few minutes; `-m "not slow"`
+skips the solver runs and takes seconds):
 
 ```bash
-python -m pytest        # expect: 31 passed
+python -m pytest        # expect: 92 passed
 ```
 
 ### 2. Run the full pipeline on the small example
@@ -89,7 +90,7 @@ console/batch:
 |---|---|---|---|
 | 1_mesher | `python launch_mallador.py` | `python launch_mallador.py geom.json` | — (the GUI is the only interactive mode) |
 | 2_solver | `python launch_solver.py` | `python solver.py params.json` | `python solver.py` |
-| 3_extractor | `python launch_extractor.py` | `python console_backup/extractor.py <sol.h5> <module> --voltage V` | `python console_backup/extractor.py` |
+| 3_extractor | `python launch_extractor.py` | `python launch_extractor.py <sol.h5> <module> --voltage V [--opt key=value]` | `python console_backup/extractor.py` |
 
 **Naming rule**: everything runnable starts with `launch_` (one launcher per
 pillar + the portal); the `gui_*.py` are the web interface those launchers open

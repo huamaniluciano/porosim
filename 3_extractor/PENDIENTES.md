@@ -4,17 +4,19 @@ Conscious v1 choices that were deliberately frozen (2026-07-14). They are not
 bugs: they are decisions. Each one says where it lives in the code so it can be
 changed in ONE single place when the time comes.
 
-## 1. Supersaturation factor = 2 (the paper's) — FROZEN
+## 1. Default supersaturation threshold S = 2 — FROZEN (S is a parameter since v1.1.0)
 
-Precipitates where `Q_act > 2·Ksp` (S ≈ 1.4). It is the factor used in the
-paper figures.
+Precipitates where `Q_act > S·Ksp`; the default `S = 2` (≈ 1.4 in
+concentration) is the one of the v1.0.0 figures.
 
 - **Where it lives**: `modulos/precipitation_map/precipitation.py` →
-  constant `FACTOR_PAPER = 2.0`. It is the default of the batch (`guardar()`),
-  of `crear_figura()`, of the console TextBox and of the GUI slider.
-- **To change it**: touch ONLY `FACTOR_PAPER`. For a one-off batch run another
-  factor can be passed via `guardar(..., factor=X)` (deliberately not exposed on
-  the CLI: the paper uses 2).
+  constant `FACTOR_PAPER = 2.0`. It is the default of `guardar()`, of
+  `crear_figura()`, of the console TextBox, of the GUI number fields and of
+  `precipitation_onset`.
+- **To change the default**: touch ONLY `FACTOR_PAPER`.
+- **For one run** (v1.1.0): `--opt factor=10` in batch, the "threshold S" field
+  in the GUI (0.1 to 1000), the TextBox in the console. Other papers use other
+  thresholds (e.g. S = 10), so it is no longer fixed to the paper's value.
 
 ## 2. Activity model: Davies with a cap at I = 0.5 M — DO NOT MOVE
 
@@ -48,8 +50,8 @@ Historical convention kept so as not to break existing scripts:
 Since everything lands in the solution folder, the stem is redundant; if it is
 ever unified, do it in the `guardar()` of all modules at once.
 
-## 5. Console: the precipitation TextBox now starts at 2.0
+## 5. Console: the precipitation TextBox starts at FACTOR_PAPER
 
 It used to start at 1.5 (historical value); it was aligned to `FACTOR_PAPER` so
-that console, GUI and batch show the same by default. If 1.5 is missed, it is
-one line in `procesar()` of `precipitation.py`.
+that console, GUI and batch show the same by default. Since v1.1.0 the console
+also asks for the map style (binary / ternary / log10) before opening it.

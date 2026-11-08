@@ -8,10 +8,12 @@
 
 Dashboard científico sobre una SOLUCIÓN del solver (Pilar 2):
   · Pestaña A — Barrido completo: curva I-V, factor de rectificación a ±1 V
-    y conductancia diferencial dI/dV (de la tabla IV_curve_*.txt).
+    y conductancia diferencial dI/dV (de la tabla IV_curve_*.txt); en sales
+    poco solubles, el voltaje de aparición de precipitado (max Q_act/Ksp vs V).
   · Pestaña B — Física interna a un voltaje: perfiles axiales (r=0) de φ y
     concentraciones, mapas 2D de potencial (± líneas de campo), iones
-    totales y precipitación de Davies (solo sales poco solubles).
+    totales y precipitación de Davies (solo sales poco solubles; umbral S y
+    estilo binario / ternario / log₁₀ Ω).
 
 DIFERENCIA CLAVE vs. la versión original: esta GUI NO reimplementa la física
 ni el graficado. Importa los MÓDULOS de modulos/<categoria>/ (los mismos que
@@ -45,6 +47,7 @@ import matplotlib.pyplot as plt
 
 # ─── Módulos del extractor (única fuente de verdad de física + figuras) ─────
 import precipitation
+import precipitation_onset
 import potential
 import field_lines          # noqa: F401 (mismo crear_figura que potencial con campo)
 import ions
@@ -123,6 +126,17 @@ def perfil_concentracion_promedio(z_nm, r_nm, tri, cp, cm,
                                    z_tip, z_base, R_tip, R_base, c0):
     return perf_prom.perfil_promedio_seccion(z_nm, r_nm, tri, cp, cm,
                                              z_tip, z_base, R_tip, R_base, c0)
+
+
+@st.cache_data(max_entries=4,
+               show_spinner="Reading every voltage of the .h5 → max Q_act/Ksp ...")
+def barrido_saturacion(h5_path, mtime, V_max, n_steps, c0, Kps, z_p, z_m):
+    """{"V", "S_max"} de todo el barrido (precipitation_onset). No pasa por
+    extraer_campos: leer todos los voltajes por ahí vaciaría su caché."""
+    rec = cargar_malla(h5_path, mtime)
+    return precipitation_onset.calcular_barrido(
+        lambda lab: pc.leer_campos(h5_path, rec["mesh"], rec["V"], lab),
+        detectar_voltajes(h5_path, mtime, V_max, n_steps), c0, Kps, z_p, z_m)
 
 
 def campos_mM(h5_path, mtime, v_label, c0):
@@ -510,6 +524,64 @@ with tab_global:
                 destino_rep.write_text(texto_reporte, encoding="utf-8")
                 st.success(f"Report saved in: {destino_rep}")
 
+    # ── A.2: APARICIÓN DE PRECIPITADO vs V (módulo precipitation_onset) ────
+    if precipitation.aplica(meta):
+        st.divider()
+        st.markdown("### 💎 Precipitation onset vs voltage")
+        with st.form("form_onset", border=True):
+            co1, co2 = st.columns(2)
+            factor_on = co1.number_input(
+                "Supersaturation threshold S (× Ksp)", min_value=0.1,
+                max_value=1000.0, value=float(precipitation.FACTOR_PAPER),
+                step=0.5, format="%.2f", key="onset__S",
+                help="Precipitates where Q_act > S·Ksp. The onset is the first "
+                     "|V| at which max Q_act/Ksp crosses S (interpolated "
+                     "between computed voltages).")
+            v_read_on = co2.number_input(
+                "Shaded band |V| ≤ V_read [V] (0 = none)", min_value=0.0,
+                max_value=10.0, value=0.0, step=0.05, format="%.2f",
+                help="Optional, e.g. the read voltage of a pulse protocol.")
+            btn_on = st.form_submit_button(
+                "🧮 Compute sweep (reads every voltage of the .h5)",
+                type="primary", use_container_width=True)
+        if btn_on:
+            st.session_state["onset__on"] = True
+
+        if not st.session_state.get("onset__on"):
+            st.info("👆 Reads every voltage once (slow the first time, then cached).")
+        else:
+            barrido = None
+            try:
+                barrido = barrido_saturacion(
+                    h5_path, mtime, sim.get("V_max_V"), sim.get("n_steps"), c0,
+                    sal["Ksp_M2"] or pc.KPS_LEGACY_M2, sal["z_p"], sal["z_m"])
+            except Exception as e:
+                st.error(f"Could not read the voltage sweep from the .h5: {e}")
+            if barrido is not None and len(barrido["V"]):
+                v_on = precipitation.voltaje_umbral(barrido["V"], barrido["S_max"],
+                                                    factor_on)
+                co3, co4, co5 = st.columns(3)
+                for col, signo in ((co3, "+"), (co4, "-")):
+                    v = v_on[signo]
+                    col.metric(f"Onset ({signo}V) at S = {factor_on:g}",
+                               "none in the sweep" if v is None else f"{signo}{v:.2f} V")
+                k_max = int(np.argmax(barrido["S_max"]))
+                co5.metric("Highest max Q_act/Ksp", f"{barrido['S_max'][k_max]:.3g}",
+                           help=f"At {barrido['V'][k_max]:+.2f} V.")
+
+                def dibujar_onset(leyenda, limpio):
+                    return precipitation_onset.crear_figura(
+                        barrido, ctx, factor=factor_on, v_read=v_read_on or None,
+                        leyenda=leyenda, titulo=not limpio)
+
+                datos_on = None
+                if pd is not None:
+                    datos_on = {"df": pd.DataFrame({"Voltage_V": barrido["V"],
+                                                    "max_Qact_over_Ksp": barrido["S_max"]}),
+                                "header": f"max Q_act/Ksp vs V (Davies) | {stem}"}
+                panel_grafico("onset", dibujar_onset, carpeta_sol,
+                              f"{stem}_precipitation_onset_f{factor_on:g}", datos_on)
+
 
 # =============================================================================
 # PESTAÑA B — FÍSICA INTERNA A UN VOLTAJE (usa las crear_figura de los módulos)
@@ -774,18 +846,24 @@ with tab_local:
 
         # ── B.4: PRECIPITACIÓN (DAVIES) — solo sales poco solubles ──────────
         elif hay_precip and vista == VISTA_PRECIP:
-            Kps = sal["Ksp_M2"]
-            if Kps is None:
-                Kps = pc.KPS_LEGACY_M2
+            if sal["Ksp_M2"] is None:
                 st.caption(f"⚠️ The _sim.json does not define Ksp: using legacy "
                            f"{pc.KPS_LEGACY_M2:.2e} M² (KClO4 at 25 °C).")
 
+            ESTILOS_PRECIP = {"Binary (precipitates / soluble)": "binario",
+                              "Ternary (+ supersaturated below S)": "ternario",
+                              "log₁₀(Q_act/Ksp), continuous": "log10"}
             with st.form("form_precip", border=True):
-                factor = st.slider(
-                    "Supersaturation factor (× Ksp)",
-                    min_value=0.5, max_value=3.0, value=2.0, step=0.05,
-                    help="Precipitates where Q_act > factor·Ksp. The paper uses "
-                         "factor = 2 (S ≈ 1.4).")
+                cp1, cp2 = st.columns([1, 2])
+                factor = cp1.number_input(
+                    "Supersaturation threshold S (× Ksp)", min_value=0.1,
+                    max_value=1000.0, value=float(precipitation.FACTOR_PAPER),
+                    step=0.5, format="%.2f", key="precip__S",
+                    help="Precipitates where Q_act > S·Ksp (Davies activities). "
+                         f"Default S = {precipitation.FACTOR_PAPER:g}, the one of the "
+                         "v1.0.0 figures.")
+                estilo_lbl = cp2.radio("Map style", list(ESTILOS_PRECIP),
+                                       horizontal=True, key="precip__estilo")
                 zoom_local = st.checkbox("Zoom in on channel tip", value=True)
                 btn_precip = st.form_submit_button(f"🧮 Compute and Plot ({v_label} V)", type="primary", use_container_width=True)
 
@@ -795,20 +873,25 @@ with tab_local:
             if st.session_state.get("v_calc__precip") != v_label:
                 st.info(f"👆 Selected voltage: **{v_label} V**. Adjust the options and click **🧮 Compute and Plot ({v_label} V)**.")
             else:
-                ctxv  = ctx_v(v_label)
-                datos = datos_2d(h5_path, mtime, v_label, c0)
+                ctxv   = ctx_v(v_label)
+                datos  = datos_2d(h5_path, mtime, v_label, c0)
+                estilo = ESTILOS_PRECIP[estilo_lbl]
 
-                res = precipitation.calcular_precipitacion(
-                    datos["cp_mM"], datos["cm_mM"], sal["z_p"], sal["z_m"], Kps, factor)
-                st.metric("Precipitating nodes",
-                          f"{res['n_precip']}/{res['n_total']} "
-                          f"({100.0 * res['n_precip'] / res['n_total']:.2f} %)")
+                _, res = precipitation.valores_mapa(datos, ctxv, factor, estilo)
+                cm1, cm2, cm3 = st.columns(3)
+                cm1.metric("Precipitating nodes (Q_act > S·Ksp)",
+                           f"{res['n_precip']}/{res['n_total']} "
+                           f"({100.0 * res['n_precip'] / res['n_total']:.2f} %)")
+                cm2.metric("Supersaturated nodes (Q_act > Ksp)",
+                           f"{res['n_sobresat']}/{res['n_total']} "
+                           f"({100.0 * res['n_sobresat'] / res['n_total']:.2f} %)")
+                cm3.metric("max Q_act/Ksp", f"{res['omega_max']:.3g}")
 
                 def dibujar_precip(leyenda, limpio):
                     xlim, ylim = pc.limites_zoom_local(ctxv) if zoom_local else (None, None)
                     return precipitation.crear_figura(datos, ctxv, factor=factor,
                                                       leyenda=leyenda, figsize=(11, 6),
-                                                      xlim=xlim, ylim=ylim)
+                                                      xlim=xlim, ylim=ylim, estilo=estilo)
 
                 panel_grafico("precip", dibujar_precip, carpeta_sol,
-                              f"{stem}_precipitation_{v_label}V_f{factor:g}")
+                              precipitation.nombre_base(stem, v_label, factor, estilo))

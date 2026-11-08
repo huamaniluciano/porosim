@@ -19,7 +19,12 @@
                                             -1.0,0.0,0.5    several (the mesh is
                                                             loaded ONLY once)
                                             all             all of the .h5
-                                        (solution_summary does not use --voltage)
+                                        (solution_summary and precipitation_onset
+                                        do not use --voltage)
+                                        --opt key=value (repeatable) passes an
+                                        option to the module's guardar(), e.g.
+                                            --opt factor=10 --opt estilo=ternary
+                                        ('list' shows each module's options)
 
   python launch_extractor.py <solution>  → lists the applicable modules.
   python launch_extractor.py list        → lists the available modules.
@@ -32,7 +37,8 @@ of potential/ions/precipitation) at each voltage.
 Modules (contract in modulos/MODULE_CONTRACT.md):
   potential_map   : 2D potential + field lines
   ion_maps      : concentration of each ion (2D) + total ions
-  precipitation_map : precipitation zone (only sparingly soluble salts)
+  precipitation_map : precipitation zone and onset voltage (only sparingly
+                      soluble salts)
   axial_profiles       : axial profiles (potential, ions, section average)
   + solution_summary/solution_summary.py (run summary)
 
@@ -163,14 +169,84 @@ def _resolver_solucion(ruta):
     return p
 
 
+# Parámetros de guardar() que son del contrato (no se pasan con --opt).
+_PARAMS_CONTRATO = ("datos", "ctx", "ruta_solucion", "png", "con_datos")
+
+
+def opciones_modulo(modulo):
+    """{nombre: default} de los parámetros EXTRA de guardar() (los que tienen
+    default y no son del contrato): son las opciones --opt del batch."""
+    import inspect
+    guardar = getattr(modulo, "guardar", None)
+    if guardar is None:
+        return {}
+    return {n: p.default for n, p in inspect.signature(guardar).parameters.items()
+            if n not in _PARAMS_CONTRATO and p.default is not inspect.Parameter.empty
+            and p.kind in (p.POSITIONAL_OR_KEYWORD, p.KEYWORD_ONLY)}
+
+
+def _valor_opt(texto):
+    """'10' → 10 · '2.5' → 2.5 · 'true'/'false' → bool · 'none' → None ·
+    '-500,500' → (-500, 500) · lo demás queda como texto."""
+    t = texto.strip()
+    if "," in t:
+        return tuple(_valor_opt(x) for x in t.split(",") if x.strip())
+    low = t.lower()
+    if low in ("true", "yes", "on"):
+        return True
+    if low in ("false", "no", "off"):
+        return False
+    if low in ("none", "null"):
+        return None
+    for tipo in (int, float):
+        try:
+            return tipo(t)
+        except ValueError:
+            pass
+    return t
+
+
+def parsear_opts(pares):
+    """['factor=10', 'estilo=ternary'] → {'factor': 10, 'estilo': 'ternary'}."""
+    opts = {}
+    for par in pares:
+        clave, igual, valor = par.partition("=")
+        clave = clave.strip()
+        if not igual or not clave.isidentifier() or not valor.strip():
+            _err(f"--opt '{par}': use key=value (e.g. --opt factor=10).")
+        opts[clave] = _valor_opt(valor)
+    return opts
+
+
+def validar_opts(nombre_modulo, modulo, opts):
+    """Aborta si alguna opción no existe en el guardar() del módulo."""
+    validas = opciones_modulo(modulo)
+    malas = sorted(set(opts) - set(validas))
+    if malas:
+        disponibles = (", ".join(f"{k} (default {v!r})" for k, v in validas.items())
+                       or "none")
+        _err(f"--opt {', '.join(malas)}: not an option of '{nombre_modulo}'. "
+             f"Its options: {disponibles}.")
+
+
 def _imprimir_modulos():
+    import matplotlib
+    matplotlib.use("Agg")          # cargar los módulos sin abrir ventanas
     mods = todos_los_modulos()
     print("\nAvailable modules (use them as the 2nd argument):")
     for nombre, ruta in mods.items():
         cat = ruta.parent.name
-        print(f"  {nombre:<28} ({cat})")
+        try:
+            opts = opciones_modulo(_cargar_modulo(ruta))
+        except Exception:
+            opts = {}
+        extra = ("   --opt " + " ".join(f"{k}={v}" for k, v in opts.items())
+                 if opts else "")
+        print(f"  {nombre:<28} ({cat}){extra}")
     print("\nExample:  python launch_extractor.py <solution.h5> axis_profile_potential"
           " --voltage -1.0 --save-data")
+    print("          python launch_extractor.py <solution.h5> precipitation"
+          " --voltage 1.0 --opt factor=10 --opt estilo=ternary")
 
 
 def _resolver_voltajes(voltaje, labels):
@@ -198,10 +274,12 @@ def _resolver_voltajes(voltaje, labels):
     return pedidas
 
 
-def _modo_batch(ruta_sol, nombre_modulo, voltaje, guardar_datos=False):
+def _modo_batch(ruta_sol, nombre_modulo, voltaje, guardar_datos=False, opts=None):
     """Corre un módulo sin prompts ni ventanas, vía su contrato
     preparar()/guardar() (ver modulos/MODULE_CONTRACT.md).
-    Siempre guarda el/los PNG; con guardar_datos exporta también las tablas."""
+    Siempre guarda el/los PNG; con guardar_datos exporta también las tablas.
+    opts = {clave: valor} de --opt → kwargs extra de guardar()."""
+    opts = opts or {}
     ruta_solucion = _resolver_solucion(ruta_sol)
 
     mods = todos_los_modulos()
@@ -231,6 +309,9 @@ def _modo_batch(ruta_sol, nombre_modulo, voltaje, guardar_datos=False):
         _err(f"Module '{nombre_modulo}' does not implement the batch contract "
              f"(preparar/guardar; see modulos/MODULE_CONTRACT.md).\n"
              f"   Run it from the interactive menu, or add the contract to it.")
+    validar_opts(nombre_modulo, modulo, opts)
+    if opts:
+        print(f">>> [batch] options: {opts}")
 
     if str(CARPETA_MODULOS) not in sys.path:
         sys.path.insert(0, str(CARPETA_MODULOS))
@@ -245,8 +326,7 @@ def _modo_batch(ruta_sol, nombre_modulo, voltaje, guardar_datos=False):
         if prep is None:
             _err(f"'{nombre_modulo}' could not prepare the solution.")
         datos, ctx = prep
-        rutas = modulo.guardar(datos, ctx, ruta_solucion,
-                               con_datos=guardar_datos)
+        rutas = _guardar(modulo, datos, ctx, ruta_solucion, guardar_datos, opts)
     else:
         if voltaje is None:
             _err("Missing --voltage. Examples:  --voltage -1.0  |  "
@@ -266,10 +346,21 @@ def _modo_batch(ruta_sol, nombre_modulo, voltaje, guardar_datos=False):
                 print(f"[batch] {v_label}V: could not prepare; skipping.")
                 continue
             datos, ctx = prep
-            rutas += modulo.guardar(datos, ctx, ruta_solucion,
-                                    con_datos=guardar_datos)
+            rutas += _guardar(modulo, datos, ctx, ruta_solucion, guardar_datos, opts)
 
     print(f"\n[batch] Done: {len(rutas)} file(s) in {ruta_solucion.parent}")
+
+
+def _guardar(modulo, datos, ctx, ruta_solucion, guardar_datos, opts):
+    """guardar() del módulo con las --opt; un valor inválido (ValueError del
+    módulo, p. ej. factor=0) corta con un mensaje claro, sin traceback."""
+    try:
+        return modulo.guardar(datos, ctx, ruta_solucion,
+                              con_datos=guardar_datos, **opts)
+    except (ValueError, TypeError) as e:
+        if not opts:
+            raise
+        _err(f"--opt {opts}: {e}")
 
 
 # =============================================================================
@@ -426,17 +517,26 @@ if __name__ == "__main__":
     if guardar_datos:
         argv.remove("--save-data")
 
+    pares_opt = []
+    while "--opt" in argv:
+        i = argv.index("--opt")
+        if i + 1 >= len(argv):
+            _err("--opt needs key=value:  --opt factor=10")
+        pares_opt.append(argv[i + 1])
+        argv = argv[:i] + argv[i + 2:]
+    opts = parsear_opts(pares_opt)
+
     if argv and argv[0] in ("list", "--list"):
         _imprimir_modulos()
     elif argv and argv[0] in ("-h", "--help", "help"):
         print(__doc__)
     elif argv and (argv[0].endswith(".h5") or pathlib.Path(argv[0]).is_dir()):
         nombre_modulo = argv[1] if len(argv) >= 2 else None
-        _modo_batch(argv[0], nombre_modulo, voltaje, guardar_datos)
+        _modo_batch(argv[0], nombre_modulo, voltaje, guardar_datos, opts)
     elif argv:
         _err(f"Unrecognized argument: '{argv[0]}'.\n"
              f"   python launch_extractor.py [solution.h5 [module] "
-             f"[--voltage V] [--save-data]]\n"
+             f"[--voltage V] [--save-data] [--opt key=value ...]]\n"
              f"   python launch_extractor.py list        (available modules)")
     else:
         _interactivo()

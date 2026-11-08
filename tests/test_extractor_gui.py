@@ -3,11 +3,14 @@
 Extractor GUI (gui_extractor_app.py) driven with Streamlit's AppTest.
 
 The FEniCS-dependent loaders of porosim_comun (mesh, voltages, nodal fields)
-are replaced by a synthetic axisymmetric mesh and fields, so the test runs in
-seconds without FEniCS (not marked `slow`). It walks every per-voltage view,
-presses every "Compute and Plot" button and fails on any exception, for:
+are replaced by a synthetic axisymmetric mesh and fields (`fenics_stub`,
+conftest), so the test runs in seconds without FEniCS (not marked `slow`). It
+walks every per-voltage view, presses every "Compute and Plot" button and fails
+on any exception, for:
 
   * the committed binary demo (KClO4: four views, precipitation included);
+  * the same demo with the three precipitation map styles, a threshold S = 10
+    and the onset-vs-voltage sweep of the full-sweep tab (v1.1.0);
   * a mixture (KCl + HCl, three ions, v1.1.0): only the potential views, and
     the axial profile offers the potential alone.
 """
@@ -18,45 +21,12 @@ import pytest
 
 pytest.importorskip("streamlit")
 pytest.importorskip("pandas")
-np = pytest.importorskip("numpy")
+pytest.importorskip("numpy")
 from streamlit.testing.v1 import AppTest  # noqa: E402
-
-import porosim_comun as pc  # noqa: E402  (3_extractor/modulos on sys.path via conftest)
 
 _DEMO = "RESULTS/solutions/demo-conical_KClO4_100.0mM"
 _STEM_DEMO = "demo-conical_KClO4_100.0mM"
 _STEM_MIX = "demo-conical_KCl_100mM+HCl_10mM"
-
-
-@pytest.fixture
-def fenics_stub(monkeypatch):
-    """Synthetic mesh + fields in place of the .h5 readers (FEniCS)."""
-    import matplotlib.tri as mtri
-    rng = np.random.default_rng(0)
-    z = np.concatenate([rng.uniform(0, 1300e-9, 3000), np.linspace(0, 1300e-9, 200)])
-    r = np.concatenate([rng.uniform(0, 500e-9, 3000), np.zeros(200)])
-    tri = mtri.Triangulation(z, r).triangles
-
-    def datos_malla(_mesh):
-        eje = np.where(r < 1e-12)[0]
-        return {"z_nm": z * 1e9, "r_nm": r * 1e9, "tri": tri,
-                "axis_idx": eje[np.argsort(z[eje])]}
-
-    def leer_campos(_ruta, _mesh, V, _v_label):
-        n_iones = V[1]
-        phi = 0.3 * np.tanh((z * 1e9 - 500) / 40) * np.exp(-(r * 1e9 / 150) ** 2) / 0.0257
-        campos = {"phi_adim": phi,
-                  "us": [0.1 * np.sin(z * 1e7 + k) for k in range(n_iones)]}
-        if n_iones == 2:
-            campos["up"], campos["um"] = campos["us"]
-        return campos
-
-    monkeypatch.setattr(pc, "cargar_malla", lambda _h5: object())
-    monkeypatch.setattr(pc, "espacio_mixto", lambda _mesh, n_iones=2: ("V", n_iones))
-    monkeypatch.setattr(pc, "datos_malla", datos_malla)
-    monkeypatch.setattr(pc, "detectar_voltajes",
-                        lambda _h5, _mesh, sim=None: ["-0.10", "+0.00", "+0.10"])
-    monkeypatch.setattr(pc, "leer_campos", leer_campos)
 
 
 def _solucion_mezcla(repo_root, carpeta):
@@ -118,3 +88,26 @@ def test_gui_mixture(repo_root, fenics_stub, tmp_path):
     vistas, modos = _recorrer_vistas(at)
     assert len(vistas) == 2 and not any("concentration" in v for v in vistas)
     assert modos == ["Potential only (φ(z))"]
+
+
+def test_gui_precipitation_styles_and_onset(repo_root, fenics_stub):
+    at = _abrir(repo_root, repo_root / _DEMO / f"Solutions_{_STEM_DEMO}.h5")
+
+    # Full-sweep tab: onset vs voltage (reads every voltage of the stub)
+    [b for b in at.button if "Compute sweep" in str(b.label)][0].click().run()
+    assert not at.exception, [e.message for e in at.exception]
+    etiquetas = [str(m.label) for m in at.metric]
+    assert any(e.startswith("Onset (+V) at S = 2") for e in etiquetas), etiquetas
+
+    # Per-voltage precipitation view: every style, threshold S = 10
+    vista = [v for v in [x for x in at.radio if x.key == "vista_local"][0].options
+             if "Precipitation" in v][0]
+    [x for x in at.radio if x.key == "vista_local"][0].set_value(vista).run()
+    estilo = [x for x in at.radio if x.key == "precip__estilo"][0]
+    assert len(estilo.options) == 3
+    for opcion in estilo.options:
+        [x for x in at.radio if x.key == "precip__estilo"][0].set_value(opcion)
+        at.number_input(key="precip__S").set_value(10.0)
+        [b for b in at.button if "Compute and Plot" in str(b.label)][0].click().run()
+        assert not at.exception, (opcion, [e.message for e in at.exception])
+        assert any("Supersaturated nodes" in str(m.label) for m in at.metric)

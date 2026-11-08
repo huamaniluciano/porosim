@@ -126,6 +126,13 @@ def _run_solver(repo_root, out_dir, mesh_dir, params):
 
 
 @pytest.fixture(scope="session")
+def require_fenics():
+    """Skip the test unless a fresh subprocess can import FEniCS."""
+    if not _fenics_importable():
+        pytest.skip("FEniCS not usable in this environment (see T1 _require notes)")
+
+
+@pytest.fixture(scope="session")
 def solver_run(repo_root, tmp_path_factory):
     """Run the PNP solver ONCE on the committed FILM-LESS demo mesh with the
     golden params; return {"dir", "iv", "h5", "sim_json"}. Shared by the
@@ -304,3 +311,40 @@ def solver_run_effective_salt(repo_root, tmp_path_factory):
     assert iv.is_file(), \
         f"solver did not produce the I-V curve.\nstdout tail:\n{proc.stdout[-1500:]}"
     return {"dir": out_dir, "iv": iv}
+
+
+# --- FEniCS stub for the fast extractor tests (GUI AppTest, in-process batch) --
+@pytest.fixture
+def fenics_stub(monkeypatch):
+    """Synthetic axisymmetric mesh + fields in place of the .h5 readers of
+    porosim_comun (FEniCS), so the GUI and the batch launcher run without
+    FEniCS. Three voltages; the fields do not depend on the voltage."""
+    import numpy as np
+    import matplotlib.tri as mtri
+    import porosim_comun as pc
+
+    rng = np.random.default_rng(0)
+    z = np.concatenate([rng.uniform(0, 1300e-9, 3000), np.linspace(0, 1300e-9, 200)])
+    r = np.concatenate([rng.uniform(0, 500e-9, 3000), np.zeros(200)])
+    tri = mtri.Triangulation(z, r).triangles
+
+    def datos_malla(_mesh):
+        eje = np.where(r < 1e-12)[0]
+        return {"z_nm": z * 1e9, "r_nm": r * 1e9, "tri": tri,
+                "axis_idx": eje[np.argsort(z[eje])]}
+
+    def leer_campos(_ruta, _mesh, V, _v_label):
+        n_iones = V[1]
+        phi = 0.3 * np.tanh((z * 1e9 - 500) / 40) * np.exp(-(r * 1e9 / 150) ** 2) / 0.0257
+        campos = {"phi_adim": phi,
+                  "us": [0.1 * np.sin(z * 1e7 + k) for k in range(n_iones)]}
+        if n_iones == 2:
+            campos["up"], campos["um"] = campos["us"]
+        return campos
+
+    monkeypatch.setattr(pc, "cargar_malla", lambda _h5: object())
+    monkeypatch.setattr(pc, "espacio_mixto", lambda _mesh, n_iones=2: ("V", n_iones))
+    monkeypatch.setattr(pc, "datos_malla", datos_malla)
+    monkeypatch.setattr(pc, "detectar_voltajes",
+                        lambda _h5, _mesh, sim=None: ["-0.10", "+0.00", "+0.10"])
+    monkeypatch.setattr(pc, "leer_campos", leer_campos)

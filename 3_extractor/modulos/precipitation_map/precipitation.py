@@ -25,7 +25,23 @@ las dos):
     calc_gamma_davies(I_molar, z_p, z_m)          → γ± (Davies, cap 0.5 M)
     calcular_precipitacion(cp, cm, z_p, z_m, Kps, factor)
                                                   → {mapa_bin, Q_act, n_precip, n_total}
-    crear_figura(datos, ctx, factor, ...)         → matplotlib Figure
+    saturacion(cp, cm, z_p, z_m, Kps)             → Ω = Q_act/Ksp en cada nodo
+    clasificar_saturacion(cp, cm, z_p, z_m, Kps, factor)
+                                                  → 0 subsaturada | 1 sobresaturada
+                                                    sin nuclear | 2 precipita
+    s_max(datos, Kps, z_p, z_m)                   → max Ω del dominio (un voltaje)
+    voltaje_umbral(V, S_max, factor)              → |V| de aparición por polaridad
+    crear_figura(datos, ctx, factor, estilo, ...) → matplotlib Figure
+    nombre_base(stem, v_label, factor, estilo)    → nombre de archivo (sin extensión)
+
+El barrido completo (max Ω vs V y voltaje de aparición) es el módulo global
+precipitation_onset.py, que usa s_max() y voltaje_umbral() de acá.
+
+`factor` es el umbral S de sobresaturación: precipita donde Q_act > S·Ksp.
+Default FACTOR_PAPER; en batch se cambia con --opt factor=10 (v1.1.0).
+`estilo` del mapa (v1.1.0): "binario" (el de siempre), "ternario" (separa la
+zona sobresaturada que todavía no nuclea, Ksp < Q_act ≤ S·Ksp) o "log10"
+(log₁₀ Ω continuo, con la línea del umbral).
 
 datos = {"z_nm", "r_nm", "tri", "cp_mM", "cm_mM"} (arrays SIN espejar);
 ctx   = porosim_comun.contexto_de(meta, stem, v_label).
@@ -38,6 +54,7 @@ import pathlib
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap
+from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
 
 _MOD = str(pathlib.Path(__file__).resolve().parents[1])
@@ -45,9 +62,11 @@ if _MOD not in sys.path:
     sys.path.insert(0, _MOD)
 import porosim_comun as pc
 
-# Factor de sobresaturación del PAPER (precipita donde Q_act > 2·Kps, S≈1.4).
+# Umbral S de sobresaturación por defecto: precipita donde Q_act > 2·Kps
+# (S ≈ 1.4 en concentración), el de las figuras de v1.0.0.
 # DECISIÓN FIJADA (ver ../../PENDIENTES.md): es el default del batch, de la
-# GUI (slider) y del TextBox de consola. Cambiarlo SOLO acá.
+# GUI y del TextBox de consola. Desde v1.1.0 S es un parámetro (batch:
+# --opt factor=10; GUI y consola: campo numérico); el DEFAULT se cambia SOLO acá.
 FACTOR_PAPER = 2.0
 
 
@@ -102,10 +121,76 @@ def aplica(meta):
     return sal.get("soluble") is False and sal.get("Ksp_M2") is not None
 
 
+def saturacion(cp_mM, cm_mM, z_p, z_m, Kps_M2):
+    """Ω = Q_act/Ksp en cada nodo (Ω = 1: saturada; Davies, como el mapa)."""
+    return calcular_precipitacion(cp_mM, cm_mM, z_p, z_m, Kps_M2, 1.0)["Q_act"] / Kps_M2
+
+
+def clasificar_saturacion(cp_mM, cm_mM, z_p, z_m, Kps_M2, factor):
+    """0: Q_act ≤ Ksp (subsaturada, un sólido se disolvería) | 1: Ksp < Q_act ≤
+    factor·Ksp (sobresaturada, pero bajo el umbral de nucleación) | 2: Q_act >
+    factor·Ksp (precipita: es exactamente el 1 del mapa binario)."""
+    Q = calcular_precipitacion(cp_mM, cm_mM, z_p, z_m, Kps_M2, factor)["Q_act"]
+    return np.where(Q > factor * Kps_M2, 2.0, np.where(Q > Kps_M2, 1.0, 0.0))
+
+
+def s_max(datos, Kps, z_p, z_m):
+    """max Ω = max(Q_act/Ksp) sobre todo el dominio, para UN voltaje."""
+    return float(np.max(saturacion(datos["cp_mM"], datos["cm_mM"], z_p, z_m, Kps)))
+
+
+def voltaje_umbral(V, smax, factor):
+    """Primer |V| (interpolado linealmente entre voltajes calculados) en que
+    max Ω supera `factor`, por polaridad → {"+": |V| o None, "-": |V| o None}.
+    Si ya lo supera en el |V| más chico de la rama, devuelve ese |V|."""
+    V, smax = np.asarray(V, dtype=float), np.asarray(smax, dtype=float)
+    out = {}
+    for signo, m in (("+", V >= 0), ("-", V <= 0)):
+        v, s = np.abs(V[m]), smax[m]
+        orden = np.argsort(v)
+        v, s = v[orden], s[orden]
+        idx = np.nonzero(s > factor)[0]
+        if len(idx) == 0:
+            out[signo] = None
+        elif idx[0] == 0:
+            out[signo] = float(v[0])
+        else:
+            i = idx[0]
+            out[signo] = float(v[i - 1] + (factor - s[i - 1]) * (v[i] - v[i - 1])
+                               / (s[i] - s[i - 1]))
+    return out
+
+
 # =============================================================================
 # FIGURA (la misma para consola y GUI)
 # =============================================================================
 CMAP_BIN = ListedColormap(["#80CCFF", "#FF0000"])
+# Ternario: los colores del binario + ámbar para la zona sobresaturada que
+# todavía no nuclea (el binario la pinta de azul, como "soluble").
+COLOR_META    = "#FFC857"
+CMAP_TERNARIO = ListedColormap(["#80CCFF", COLOR_META, "#FF0000"])
+ESTILOS = ("binario", "ternario", "log10")
+_ALIAS_ESTILO = {"binary": "binario", "ternary": "ternario", "log": "log10",
+                 "log10s": "log10", "saturation": "log10"}
+LOG10_RANGO = 3.0          # escala fija ±3 décadas de Ω: comparable entre voltajes
+
+
+def estilo_valido(estilo):
+    """'binary'/'ternary'/'log' (inglés) o los nombres de ESTILOS → nombre interno."""
+    e = str(estilo).strip().lower()
+    e = _ALIAS_ESTILO.get(e, e)
+    if e not in ESTILOS:
+        raise ValueError(f"estilo '{estilo}' unknown: use one of {ESTILOS} "
+                         f"(or binary/ternary/log)")
+    return e
+
+
+def nombre_base(stem, v_label, factor, estilo="binario"):
+    """Nombre (sin extensión) del mapa de cada estilo, el mismo en batch y GUI.
+    binario → {stem}_precipitation_{V}V_f{S} (el de v1.0.0)."""
+    sufijo = {"binario": "precipitation", "ternario": "saturation_ternary",
+              "log10": "saturation_log10"}[estilo_valido(estilo)]
+    return f"{stem}_{sufijo}_{v_label}V_f{float(factor):g}"
 
 
 def leyenda_precipitacion():
@@ -115,11 +200,64 @@ def leyenda_precipitacion():
                   label="Precipitates (Q_act > threshold)")]
 
 
+def leyenda_ternaria():
+    return [Patch(facecolor="#80CCFF", edgecolor="k", label="Undersaturated (Q_act ≤ Ksp)"),
+            Patch(facecolor=COLOR_META, edgecolor="k",
+                  label="Supersaturated, below S (Ksp < Q_act ≤ S·Ksp)"),
+            Patch(facecolor="#FF0000", edgecolor="k", label="Precipitates (Q_act > S·Ksp)")]
+
+
+def leyenda_log10(factor):
+    """Las dos isolíneas del estilo log10 (la escala de color va en la barra)."""
+    return [Line2D([], [], color="k", lw=0.9, ls="--",
+                   label=f"Q_act = S·Ksp (threshold, S = {factor:g})"),
+            Line2D([], [], color="k", lw=0.9, ls=":", label="Q_act = Ksp (saturation)")]
+
+
+def valores_mapa(datos, ctx, factor, estilo="binario"):
+    """Campo nodal (sin espejar) que pinta cada estilo + los conteos:
+    binario → 0/1, ternario → 0/1/2, log10 → log₁₀ Ω."""
+    sal = ctx["salt"]
+    Kps = sal.get("Ksp_M2") or pc.KPS_LEGACY_M2
+    res = calcular_precipitacion(datos["cp_mM"], datos["cm_mM"],
+                                 sal["z_p"], sal["z_m"], Kps, factor)
+    estilo = estilo_valido(estilo)
+    if estilo == "binario":
+        valores = res["mapa_bin"]
+    elif estilo == "ternario":
+        valores = clasificar_saturacion(datos["cp_mM"], datos["cm_mM"],
+                                        sal["z_p"], sal["z_m"], Kps, factor)
+    else:
+        valores = np.log10(np.maximum(res["Q_act"] / Kps, 1e-300))
+    res["omega_max"] = float(np.max(res["Q_act"]) / Kps)
+    res["n_sobresat"] = int(np.count_nonzero(res["Q_act"] > Kps))
+    return valores, res
+
+
 def dibujar_mapa(ax, z2, r2, tri2, bin2, ctx, factor,
-                 leyenda=True, xlim="auto", ylim=None, info=None):
-    """Dibuja el mapa binario (ya espejado) sobre un Axes existente.
-    xlim="auto" → zoom canal ±150 nm; None → dominio completo; (a,b) → manual."""
-    ax.tricontourf(z2, r2, tri2, bin2, levels=[-0.5, 0.5, 1.5], cmap=CMAP_BIN)
+                 leyenda=True, xlim="auto", ylim=None, info=None, estilo="binario",
+                 colorbar=True):
+    """Dibuja el mapa (ya espejado) sobre un Axes existente. `bin2` son los
+    valores de `valores_mapa` para ese estilo (0/1 en el binario).
+    xlim="auto" → zoom canal ±150 nm; None → dominio completo; (a,b) → manual.
+    colorbar=False (log10) → no agrega otra barra: la escala ±3 décadas es fija,
+    así que al redibujar con otro S la barra que ya está sigue valiendo."""
+    estilo = estilo_valido(estilo)
+    mapeable = None
+    if estilo == "binario":
+        ax.tricontourf(z2, r2, tri2, bin2, levels=[-0.5, 0.5, 1.5], cmap=CMAP_BIN)
+    elif estilo == "ternario":
+        ax.tricontourf(z2, r2, tri2, bin2, levels=[-0.5, 0.5, 1.5, 2.5],
+                       cmap=CMAP_TERNARIO)
+    else:
+        niveles = np.linspace(-LOG10_RANGO, LOG10_RANGO, 25)
+        mapeable = ax.tricontourf(z2, r2, tri2, np.clip(bin2, -LOG10_RANGO, LOG10_RANGO),
+                                  levels=niveles, cmap="RdBu_r", extend="neither")
+        log_f = np.log10(factor) if factor > 0 else None
+        for nivel, estilo_l in ((0.0, ":"), (log_f, "--")):
+            if nivel is not None and bin2.min() < nivel < bin2.max():
+                ax.tricontour(z2, r2, tri2, bin2, levels=[nivel], colors="k",
+                              linewidths=0.9, linestyles=estilo_l)
     ax.set_aspect("equal")
     if ylim is not None:
         ax.set_ylim(*ylim)
@@ -135,7 +273,10 @@ def dibujar_mapa(ax, z2, r2, tri2, bin2, ctx, factor,
 
     if info is not None:
         pct = 100.0 * info["n_precip"] / info["n_total"]
-        ax.set_title(f"Precipitates: {info['n_precip']}/{info['n_total']} ({pct:.2f}%)")
+        titulo = f"Precipitates: {info['n_precip']}/{info['n_total']} ({pct:.2f}%)"
+        if estilo != "binario" and "omega_max" in info:
+            titulo += f"  |  max Q_act/Ksp = {info['omega_max']:.3g}"
+        ax.set_title(titulo)
     ax.set_xlabel("z [nm]")
     ax.set_ylabel("r [nm]")
     ax.grid(True, alpha=0.15)
@@ -143,32 +284,51 @@ def dibujar_mapa(ax, z2, r2, tri2, bin2, ctx, factor,
     pc.guias_canal(ax, ctx)
     pc.bandas_films(ax, ctx, con_labels=False)
 
+    if mapeable is not None and colorbar:
+        cbar = ax.figure.colorbar(mapeable, ax=ax, shrink=0.85)
+        cbar.set_label("log₁₀(Q_act / Ksp)")
+        pc.ticks_colorbar(cbar, -LOG10_RANGO, LOG10_RANGO)
+        for nivel, estilo_l in ((0.0, ":"), (np.log10(factor) if factor > 0 else None, "--")):
+            if nivel is not None and -LOG10_RANGO < nivel < LOG10_RANGO:
+                cbar.ax.axhline(nivel, color="k", lw=1.0, ls=estilo_l)
     if leyenda:
-        ax.legend(handles=leyenda_precipitacion(), loc="upper right",
-                  fontsize=8, framealpha=0.95, title=f"factor = {factor:g} × Kps")
+        if estilo == "log10":
+            ax.legend(handles=leyenda_log10(factor), loc="upper right", fontsize=8,
+                      framealpha=0.95)
+        else:
+            ax.legend(handles=(leyenda_precipitacion() if estilo == "binario"
+                               else leyenda_ternaria()),
+                      loc="upper right", fontsize=8, framealpha=0.95,
+                      title=f"S = {factor:g} × Ksp")
 
 
 def crear_figura(datos, ctx, factor=FACTOR_PAPER, leyenda=True,
-                 xlim="auto", ylim=(-500, 500), titulo=True, figsize=(11, 7)):
+                 xlim="auto", ylim=(-500, 500), titulo=True, figsize=(11, 7),
+                 estilo="binario"):
     """Figura canónica del módulo a partir de arrays en memoria.
-    Deja los conteos en fig.info_precipitacion = {n_precip, n_total}."""
+    Deja los conteos en fig.info_precipitacion = {n_precip, n_total,
+    n_sobresat, omega_max}."""
     sal = ctx["salt"]
     Kps = sal.get("Ksp_M2") or pc.KPS_LEGACY_M2
+    estilo = estilo_valido(estilo)
 
-    res = calcular_precipitacion(datos["cp_mM"], datos["cm_mM"],
-                                 sal["z_p"], sal["z_m"], Kps, factor)
-    z2, r2, tri2, bin2 = pc.espejo(datos["z_nm"], datos["r_nm"],
-                                   datos["tri"], res["mapa_bin"])
+    valores, res = valores_mapa(datos, ctx, factor, estilo)
+    z2, r2, tri2, val2 = pc.espejo(datos["z_nm"], datos["r_nm"],
+                                   datos["tri"], valores)
 
     fig, ax = plt.subplots(figsize=figsize)
     if titulo:
-        fig.suptitle(f"Precipitation Map ({sal['name']}) — {ctx['v_label']}V\n"
+        nombre = {"binario": "Precipitation Map", "ternario": "Saturation Map",
+                  "log10": "Saturation Q_act/Ksp"}[estilo]
+        fig.suptitle(f"{nombre} ({sal['name']}) — {ctx['v_label']}V\n"
                      f"Kps = {Kps:.2e} M²  |  {ctx['stem']}", fontsize=11)
-    dibujar_mapa(ax, z2, r2, tri2, bin2, ctx, factor,
-                 leyenda=leyenda, xlim=xlim, ylim=ylim, info=res)
+    dibujar_mapa(ax, z2, r2, tri2, val2, ctx, factor,
+                 leyenda=leyenda, xlim=xlim, ylim=ylim, info=res, estilo=estilo)
     fig.tight_layout()
     fig.info_precipitacion = {"n_precip": res["n_precip"],
-                              "n_total": res["n_total"]}
+                              "n_total": res["n_total"],
+                              "n_sobresat": res["n_sobresat"],
+                              "omega_max": res["omega_max"]}
     return fig
 
 
@@ -214,26 +374,31 @@ def preparar(ruta_solucion, v_label=None, sol=None):
 
 
 def guardar(datos, ctx, ruta_solucion, png=True, con_datos=False,
-            factor=FACTOR_PAPER):
-    """Mapa limpio publication-ready: {stem}_precipitacion_{V}V_f{factor}.png
-    (la leyenda soluble/precipita se preserva: es la "escala" del binario).
-    con_datos=True → .txt con el conteo (factor, Kps, nodos que precipitan)."""
+            factor=FACTOR_PAPER, estilo="binario"):
+    """Mapa limpio publication-ready (la leyenda se preserva: es la "escala").
+    Nombres: binario {stem}_precipitation_{V}V_f{S}.png (el de v1.0.0),
+    ternario {stem}_saturation_ternary_{V}V_f{S}.png, log10
+    {stem}_saturation_log10_{V}V_f{S}.png. Batch: --opt factor=10 --opt estilo=ternary.
+    con_datos=True → .txt con el conteo (S, Kps, nodos sobresaturados y que
+    precipitan, max Q_act/Ksp)."""
+    factor = float(factor)
+    if not factor > 0:
+        raise ValueError(f"factor (S) must be > 0, got {factor}")
+    estilo = estilo_valido(estilo)
     sal = ctx["salt"]
     Kps = sal.get("Ksp_M2") or pc.KPS_LEGACY_M2
-    res = calcular_precipitacion(datos["cp_mM"], datos["cm_mM"],
-                                 sal["z_p"], sal["z_m"], Kps, factor)
+    _, res = valores_mapa(datos, ctx, factor, estilo)
     stem, v = pathlib.Path(ruta_solucion).stem, ctx["v_label"]
+    base = nombre_base(stem, v, factor, estilo)
     rutas = []
     if png:
         figc = crear_figura(datos, ctx, factor=factor, titulo=False,
-                            figsize=(10, 4))
-        rutas.append(pc.guardar_figura(
-            figc, ruta_solucion,
-            f"{stem}_precipitation_{v}V_f{factor:g}.png", limpio=True))
+                            figsize=(10, 4), estilo=estilo)
+        rutas.append(pc.guardar_figura(figc, ruta_solucion, f"{base}.png", limpio=True))
     if con_datos:
         pct = 100.0 * res["n_precip"] / res["n_total"]
         fpath = (pathlib.Path(ruta_solucion).parent /
-                 f"{stem}_precipitation_{v}V_f{factor:g}.txt")
+                 f"{nombre_base(stem, v, factor)}.txt")      # el mismo en los 3 estilos
         fpath.write_text(
             f"# Precipitation ({sal['name']}) | {v}V | {stem}\n"
             f"# Q_act = gamma±²·c+·c- (Davies) > factor·Kps\n"
@@ -241,7 +406,9 @@ def guardar(datos, ctx, ruta_solucion, png=True, con_datos=False,
             f"Kps_M2\t{Kps:.6e}\n"
             f"nodos_precipitan\t{res['n_precip']}\n"
             f"nodos_totales\t{res['n_total']}\n"
-            f"porcentaje\t{pct:.4f}\n", encoding="utf-8")
+            f"porcentaje\t{pct:.4f}\n"
+            f"nodos_sobresaturados\t{res['n_sobresat']}\n"
+            f"max_Qact_sobre_Kps\t{res['omega_max']:.6e}\n", encoding="utf-8")
         print(f"    ✓ Saved: {fpath}")
         rutas.append(fpath)
     return rutas
@@ -250,13 +417,27 @@ def guardar(datos, ctx, ruta_solucion, png=True, con_datos=False,
 # =============================================================================
 # CÁSCARA DE CONSOLA (menú interactivo, TextBox de factor en vivo)
 # =============================================================================
+def _elegir_estilo():
+    """Prompt del estilo del mapa (Enter = binario, el de siempre)."""
+    print("    Map style: [1] binary (default)  [2] ternary (+ supersaturated "
+          "below S)  [3] log10(Q_act/Ksp)")
+    resp = input("    Style [Enter = 1]: ").strip().lower()
+    opciones = {"": "binario", "1": "binario", "2": "ternario", "3": "log10"}
+    if resp in opciones:
+        return opciones[resp]
+    try:
+        return estilo_valido(resp)
+    except ValueError:
+        print("    (unknown style: using binary)")
+        return "binario"
+
+
 def procesar(ruta_solucion):
     prep = preparar(ruta_solucion)
     if prep is None:
         return
     datos, ctx = prep
-    sal       = ctx["salt"]
-    Kps_molar = sal.get("Ksp_M2") or pc.KPS_LEGACY_M2
+    estilo = _elegir_estilo()
 
     # ── Gráfico interactivo con TextBox ──────────────────────────────────────
     print(">>> Generating interactive graphical interface...")
@@ -265,34 +446,40 @@ def procesar(ruta_solucion):
     factor_inicial = FACTOR_PAPER
     estado = {"factor": factor_inicial}
 
-    fig = crear_figura(datos, ctx, factor=factor_inicial)
+    fig = crear_figura(datos, ctx, factor=factor_inicial, estilo=estilo)
     ax  = fig.axes[0]
+    cax = fig.axes[1] if estilo == "log10" else None   # barra fija de ±3 décadas
     fig.subplots_adjust(bottom=0.22)   # espacio inferior para el TextBox
 
-    # Espejo precalculado UNA vez; cada redibujo solo recalcula el mapa binario
+    # Espejo precalculado UNA vez; cada redibujo solo recalcula los valores
     z2, r2, tri2, _ = pc.espejo(datos["z_nm"], datos["r_nm"], datos["tri"],
                                 datos["cp_mM"])
 
     def refrescar_grafico(factor):
-        res = calcular_precipitacion(datos["cp_mM"], datos["cm_mM"],
-                                     sal["z_p"], sal["z_m"], Kps_molar, factor)
-        bin2 = np.concatenate([res["mapa_bin"], res["mapa_bin"]])
+        valores, res = valores_mapa(datos, ctx, factor, estilo)
         ax.clear()
-        dibujar_mapa(ax, z2, r2, tri2, bin2, ctx, factor, info=res)
+        dibujar_mapa(ax, z2, r2, tri2, np.concatenate([valores, valores]), ctx,
+                     factor, info=res, estilo=estilo, colorbar=False)
+        if cax is not None:            # mover la marca del umbral en la barra
+            y = float(np.log10(factor))
+            for linea in cax.lines:
+                if linea.get_linestyle() == "--":
+                    linea.set_ydata([y, y])
+                    linea.set_visible(-LOG10_RANGO < y < LOG10_RANGO)
         fig.canvas.draw_idle()
 
     ax_box   = fig.add_axes([0.45, 0.06, 0.15, 0.045])
-    text_box = TextBox(ax_box, "Factor (× Ksp): ", initial=str(factor_inicial))
+    text_box = TextBox(ax_box, "Threshold S (× Ksp): ", initial=f"{factor_inicial:g}")
 
     def on_submit(text_val):
         try:
             val = float(text_val)
             if val <= 0:
-                print("⚠️ The supersaturation factor must be greater than 0.")
+                print("⚠️ The supersaturation threshold S must be greater than 0.")
                 return
             refrescar_grafico(val)
             estado["factor"] = val
-            print(f">>> Map updated for factor_sob = {val}")
+            print(f">>> Map updated for S = {val:g}")
         except ValueError:
             print("⚠️ Invalid input. Enter a numeric value.")
 
@@ -306,6 +493,6 @@ def procesar(ruta_solucion):
     # Se guarda con el ÚLTIMO factor aplicado en el TextBox (estado["factor"]).
     resp = input("\nSave clean map (content + scale only, no axes)? [y/N]: ").strip().lower()
     if resp in ("s", "si", "sí", "y", "yes"):
-        guardar(datos, ctx, ruta_solucion, factor=estado["factor"])
+        guardar(datos, ctx, ruta_solucion, factor=estado["factor"], estilo=estilo)
     else:
         print("    (no image saved)")

@@ -58,6 +58,12 @@ import porosim_comun as pc
   ACCEPTS the kwarg and ignores it (contract uniformity).
 - NO `input()`, NO `plt.show()`. Use the `pc` helpers (dpi 300, bbox tight,
   automatic close, prints "✓ Saved:").
+- **Options** (v1.1.0): any extra keyword parameter with a default
+  (`guardar(..., factor=FACTOR_PAPER, estilo="binario")`) is a batch option:
+  `--opt factor=10 --opt estilo=ternary`. The launcher validates the names
+  against the signature and `list` prints them. Validate the values inside
+  `guardar()` and raise `ValueError` with a clear message (the launcher turns
+  it into a one-line error).
 - File names (existing convention, don't invent another):
     - maps:     `{stem}_<suffix>_{V}V.png`   (e.g. `{stem}_potential_map_-1.00V.png`)
     - profiles: `<analysis>_{V}V.png / .txt / .xlsx`   (e.g. `ion_profile_-1.00V.png`)
@@ -81,8 +87,11 @@ sparingly soluble salts). The menu hides it; BATCH SKIPS it. Without `aplica()`
 → always True.
 
 **`USA_VOLTAJE = False`**
-Global modules that analyze the full sweep (`solution_summary`): `preparar()`
-ignores `v_label`/`sol` and batch does not require `--voltage`.
+Global modules that analyze the full sweep (`solution_summary`,
+`precipitation_onset`): `preparar()` ignores `v_label` and batch does not
+require `--voltage`. A global module that reads the fields of every voltage
+loads the solution once (`pc.cargar_solucion`) and keeps only what it plots
+(see `precipitation_onset.calcular_barrido`).
 
 ## Who calls what
 

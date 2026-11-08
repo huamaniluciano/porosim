@@ -7,7 +7,9 @@ Runs the extractor's real batch entry point
     python launch_extractor.py <solution.h5> <module> --voltage +0.00 --save-data
 
 on the shared demo solution and checks it produces the expected figures (PNG)
-and, for a module that exports tabular data, the numerical data file too.
+and, for a module that exports tabular data, the numerical data file too. The
+precipitation analyses run on a copy of the committed KClO4 demo solution
+(a sparingly soluble salt), with `--opt` options (v1.1.0).
 
 The extractor runs in a SUBPROCESS: it is what a reviewer runs, and FEniCS loads
 in a fresh process. It reuses the `solver_run` solution (conftest) so no extra
@@ -16,6 +18,7 @@ solver's Solutions_*.h5, closing the mesher -> solver -> extractor loop.
 
 Marked `slow`.
 """
+import shutil
 import subprocess
 import sys
 
@@ -88,3 +91,32 @@ def test_precipitation_skipped_on_soluble_salt(solver_run, repo_root):
     new_pngs = [f for f in set(sol_dir.glob("*")) - before if f.suffix == ".png"]
     assert not new_pngs, \
         f"precipitation should produce no PNG on a soluble salt, got: {[f.name for f in new_pngs]}"
+
+
+def test_precipitation_analyses_on_the_kclo4_demo(repo_root, tmp_path, require_fenics):
+    """On the committed KClO4 demo: the onset sweep reads every voltage of the
+    .h5 (one max Q_act/Ksp per voltage) and the ternary saturation map runs
+    with a non-default threshold, both through --opt."""
+    np = pytest.importorskip("numpy")
+    demo = repo_root / "RESULTS" / "solutions" / "demo-conical_KClO4_100.0mM"
+    copia = tmp_path / demo.name
+    shutil.copytree(demo, copia)
+    stem = "Solutions_demo-conical_KClO4_100.0mM"
+    launcher = repo_root / "3_extractor" / "launch_extractor.py"
+
+    for args in (["precipitation_onset", "--opt", "factor=2", "--save-data"],
+                 ["precipitation", "--voltage", "1.0", "--opt", "estilo=ternary",
+                  "--opt", "factor=10"]):
+        proc = subprocess.run([sys.executable, str(launcher), str(copia), *args],
+                              cwd=str(repo_root), capture_output=True, text=True,
+                              timeout=600)
+        assert proc.returncode == 0, (
+            f"{args[0]} failed (rc={proc.returncode}):\n"
+            f"{proc.stdout[-1500:]}\n{proc.stderr[-1500:]}")
+
+    tabla = np.loadtxt(copia / f"{stem}_precipitation_onset_f2.txt")
+    assert tabla.shape == (21, 2)                  # V_max 1 V, 11 points per branch
+    assert np.all(tabla[:, 1] > 0)
+    for png in (f"{stem}_precipitation_onset_f2.png",
+                f"{stem}_saturation_ternary_+1.00V_f10.png"):
+        assert (copia / png).stat().st_size > 0, png
