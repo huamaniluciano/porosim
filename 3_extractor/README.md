@@ -100,7 +100,7 @@ Each module implements the **standard contract** (full detail and checklist in
 | `guardar(datos, ctx, ruta, png, con_datos)` | batch + console prompts | PNG (+ tables) |
 | `procesar(ruta)` | console menu | interactive shell (`input`/`show`) |
 | `aplica(meta)` *(optional)* | menu + batch | auto-hide / skip |
-| `USA_VOLTAJE = False` *(optional)* | batch | global modules (summary) |
+| `USA_VOLTAJE = False` *(optional)* | batch | global modules (summary, I-V metrics, precipitation onset) |
 
 To add a new analysis: drop a `.py` with that contract in the appropriate
 category; the extractor lists it by itself and batch runs it without touching
@@ -150,6 +150,24 @@ live only once and are consumed by both the console and the GUI:
 `porosim_comun.py` if it is cross-cutting): the change shows up in the console
 and the GUI without touching anything else.
 
+## Potential map and field lines
+
+`potential` draws φ, and `field_lines` (the "Overlay field lines" box in the
+GUI) adds E = −∇φ on top. Since v1.1.0:
+
+- E is the gradient of a cubic interpolation of φ on the mesh, with E_r = 0
+  imposed on the axis (the interpolator left a spurious radial field there,
+  right where the central lines run).
+- The lines are traced on r ≥ 0 and drawn mirrored, so they are exactly
+  symmetric about the axis, zoomed or not. matplotlib's `streamplot` over the
+  whole mirrored plane traced the two halves differently even for an exactly
+  symmetric field.
+- The GUI's "Zoom in on channel tip" computes the field on the zoom window.
+  The grid over the whole domain is too coarse for the tip (a node every
+  ~90 nm on a 22 µm domain), so the zoom used to show almost no lines; the
+  interpolator is built on the window only, ~90× faster on a 650k-node mesh.
+- Without zoom the axes end at the data, with no autoscale margin.
+
 ## I-V metrics (`iv_metrics`, v1.1.0)
 
 Global module that reads only the `IV_curve_*.txt` table (no FEniCS, any
@@ -198,8 +216,9 @@ Everything is saved in the **solution folder**. In console mode, each module
 opens the interactive window and on closing it offers to save; in batch it saves
 directly (PNG always; numerical data with `--save-data`).
 
-The **2D maps** are exported in a **clean** version (only the domain content,
-without axes or title) with **the numerical scale bar** (labeled colorbar) so
+The **2D maps** are exported in a **clean** version (the domain content with
+its frame and tick marks, but no title, axis labels or tick values; v1.0.0
+also dropped the frame) with **the numerical scale bar** (labeled colorbar) so
 that the figure is interpretable on its own; the precipitation map carries the
 legend of its classes (binary/ternary) or its log₁₀ Ω colorbar. The **1D profiles** are exported as a
 full figure (with axes) and their data to `.txt` (and `.xlsx` for the ions

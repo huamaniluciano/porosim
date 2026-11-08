@@ -50,9 +50,11 @@ import porosim_comun as pc
 ### 3) `guardar(datos, ctx, ruta_solucion, png=True, con_datos=False) -> [Path]`
 **[REQUIRED — consumed by batch and the console prompts]**
 - `png=True` → saves the module's image(s) in the SOLUTION FOLDER. 2D maps:
-  CLEAN version (`pc.guardar_figura(..., limpio=True)`: no axes/title, colorbar
-  yes — publication-ready). 1D profiles and multi-panel figures: full figure
-  with axes.
+  CLEAN version (`pc.guardar_figura(..., limpio=True)`: no title, axis labels
+  or tick values; frame, tick marks and colorbar yes — publication-ready).
+  1D profiles and multi-panel figures: full figure with axes. `png` is the
+  historical name: `pc.guardar_figura` saves in the run's format (`--format
+  pdf|svg`, v1.1.0), so always save through it.
 - `con_datos=True` → also exports the tabular data with `pc.exportar_txt` (and
   `pc.exportar_xlsx` if applicable). If the module has no tabular data, it STILL
   ACCEPTS the kwarg and ignores it (contract uniformity).
@@ -84,7 +86,9 @@ crear_figura(datos, ctx); plt.show()
 **`aplica(meta) -> bool`**
 Does the module make sense for this solution? (e.g. precipitation only with
 sparingly soluble salts). The menu hides it; BATCH SKIPS it. Without `aplica()`
-→ always True.
+→ always True. A module that draws one cation/anion pair with a single c0
+returns `pc.aplica_binaria(meta)`, which is False for a mixture of salts or an
+asymmetric salt (v1.1.0).
 
 **`USA_VOLTAJE = False`**
 Global modules that analyze the full sweep (`solution_summary`,

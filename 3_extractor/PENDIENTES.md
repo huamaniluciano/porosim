@@ -32,7 +32,8 @@ strength is capped at 0.5 M so as not to leave the validity range.
 ## 3. Batch PNG style — FROZEN (revisit if the paper asks for something else)
 
 - **2D maps** (potential, field lines, ions, precipitation): **clean** version
-  (no axes/title, colorbar/legend yes) — same as the console's "Save clean
+  (no title, axis labels or tick values; the frame and the tick marks stay
+  since v1.1.0; colorbar/legend yes) — same as the console's "Save clean
   map?". `pc.guardar_figura(..., limpio=True)`.
 - **1D profiles** and **total_ions** (2 panels): **full** figure with axes
   and titles (the clean version is not understandable on its own).

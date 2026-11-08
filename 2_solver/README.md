@@ -4,7 +4,10 @@ Solves the strongly coupled Poisson-Nernst-Planck system in 2D axisymmetric
 form (FEniCS/dolfin 2019.1.0) on the Mesher's meshes (Pillar 1). **The physics
 is exactly that of the solver that produced the paper results** — the refactor
 into two modes only changed the packaging (verified by regression: I-V curve
-identical digit by digit).
+identical digit by digit). Since v1.1.0 the voltage sweep converges Newton at
+every step (see [Voltage-sweep tolerance](#architecture)), so the currents
+differ from v1.0.0 runs near 0 V; with the v1.0.0 tolerances it still gives
+them digit by digit.
 
 ## Two usage modes
 
@@ -97,7 +100,19 @@ at ±1 V). Each step now takes 3–4 Newton iterations with quadratic convergenc
 about 1.75× the wall time per curve. A sanity-check warning
 (`newton_few_iterations`) flags any voltage step that converges in fewer than 2
 iterations. To reproduce a v1.0.0 run, set `"tol_voltage_abs": 1e-12` and
-`"tol_voltage_rel": 1e-8` in the batch `params`.
+`"tol_voltage_rel": 1e-8` in the batch `params`. **I-V curves computed with
+v1.0.0 should be recomputed.** For a quicker sweep, use fewer voltage points
+(`n_steps`) rather than a looser tolerance: with Newton converged, the
+currents no longer depend on the step.
+
+**Adaptive step subdivision.** If Newton diverges on a voltage step, the solver
+goes back to the last converged state and tries half the step, up to
+`MAX_SUBDIVISIONES = 6` times (1/64 of the step), with a new Newton solver after
+each failure. Fixed in v1.1.0: the retries used to reuse the solver whose LU
+factorisation had failed, so they failed at once and the branch stopped at
+that voltage. With the converged tolerance a large step can need it (a single
+0 → ±1 V step at 100 mM, 0.2 V steps at 1 mM); `tests/test_solver_step_subdivision.py`
+runs the demo with one 1 V step.
 
 **Equilibrium checkpoint**: stages 1+1b are deterministic (~85 MUMPS
 factorizations); the result is saved in `RESULTS/equilibria/` with the full

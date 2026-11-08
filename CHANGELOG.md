@@ -84,9 +84,9 @@ precipitation, pH and memristor papers. Runs written by v1.0.0 (`.h5`,
   box) to compare maps of different voltages or runs, with a warning when the
   data exceed the scale.
 - **Validation against COMSOL** in the README (currents within ~1 %).
-- Tests: 31 → 105 (electrolyte logic, mixtures, voltage-step independence,
-  extractor field and export helpers, precipitation, I-V metrics, the GUI
-  driven with Streamlit's AppTest without FEniCS).
+- Tests: 31 → 107 (electrolyte logic, mixtures, voltage-step independence,
+  step subdivision, extractor field and export helpers, precipitation, I-V
+  metrics, the GUI driven with Streamlit's AppTest without FEniCS).
 
 ## [1.0.0] - 2026-07-16
 

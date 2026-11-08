@@ -40,10 +40,10 @@ conda activate porosim
 ```
 
 To confirm the install, run the test suite (a few minutes; `-m "not slow"`
-skips the solver runs and takes seconds):
+skips the solver runs and takes about a minute):
 
 ```bash
-python -m pytest        # expect: 105 passed
+python -m pytest        # expect: 107 passed
 ```
 
 ### 2. Run the full pipeline on the small example
@@ -57,17 +57,19 @@ cd 1_mesher
 python launch_mallador.py examples/geom_conico_chico.json
 #   -> 1_mesher/mallas/conico_chico/   (<name>_domain.xdmf, _facets.xdmf, _limits.json)
 
-# 2. Solve — the PNP physics on that mesh (~5 s)
+# 2. Solve — the PNP physics on that mesh (~10 s)
 cd ../2_solver
 python solver.py examples/params_conico_chico.json --mesh ../1_mesher/mallas/conico_chico
 #   -> RESULTS/solutions/conico_chico_KCl_100.0mM/   (Solutions_*.h5 + I-V table)
 
-# 3. Extract — a 2D potential map at +0.4 V, plus its numerical data
+# 3. Extract — a 2D potential map at +0.4 V
 cd ../3_extractor
 python launch_extractor.py \
     ../RESULTS/solutions/conico_chico_KCl_100.0mM/Solutions_conico_chico_KCl_100.0mM.h5 \
-    potential --voltage 0.4 --save-data
+    potential --voltage 0.4
 #   -> the PNG lands next to the solution, in that same folder
+#      (--save-data adds the numbers of the modules that have them, e.g. the
+#      axial profiles: axis_profile_potential --voltage 0.4 --save-data)
 ```
 
 You now have a mesh, an I-V curve, and a potential-map figure. For the
@@ -99,6 +101,29 @@ pillar + the portal); the `gui_*.py` are the web interface those launchers open
 The console versions equivalent to the GUI live in `console_backup/` inside
 each pillar (where they exist): they are the functional reference the GUI
 replicates, and remain 100% operational.
+
+## What's new in v1.1.0
+
+- **Converged voltage sweeps.** In v1.0.0 the Newton tolerance of the voltage
+  sweep stopped after a single linearised iteration, so the I-V curve depended
+  on the voltage step (up to 22 % at ±0.1 V with 0.1 V steps, < 0.4 % at ±1 V).
+  Newton now converges at every step (about 1.75× the run time), and the
+  adaptive step subdivision, which never rescued a diverged step, works.
+  **I-V curves computed with v1.0.0 should be recomputed.** See the
+  [solver README](2_solver/README.md#architecture).
+- **Mixtures of salts** (N ions, e.g. KCl + HCl) in the solver's batch mode,
+  and asymmetric salts (2:1, CaCl₂) with a neutral bulk.
+- **New analyses** in the extractor: I-V metrics (rectification factor, G0,
+  exponent n, S-index), precipitation onset vs V, and supersaturation maps
+  with the threshold S as a parameter.
+- **Figures**: exactly symmetric field lines, a field computed on the zoom
+  window, PDF/SVG exports with editable text, and an opt-in fixed color scale
+  to compare maps. Batch options `--opt key=value` and `--format pdf|svg`. See
+  the [extractor README](3_extractor/README.md).
+- **Validation against COMSOL** ([below](#validation)), and the test suite
+  grew from 31 to 107 tests.
+
+Full list, with the bug fixes: [CHANGELOG.md](CHANGELOG.md).
 
 ## Structure
 
@@ -217,7 +242,9 @@ mixture of salts.
   can fail, or converge to a non-physical collapsed current *without* raising an
   error. Mitigation: slower ramps (`n_steps`, `n_steps_film`) and check current
   conservation |I_in − I_out| ≪ |I_in| at each point.
-- The voltage sweep stops at the last converged point (it does not abort).
+- If Newton diverges at a voltage, the step is halved, up to 6 times; if even
+  1/64 of the step fails, the sweep stops at the last converged point (it does
+  not abort).
 
 **Meshing**
 
