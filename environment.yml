@@ -1,7 +1,6 @@
 name: porosim
 channels:
   - conda-forge
-  - defaults
 dependencies:
   # ── Núcleo científico FEniCS y Python (versiones del entorno validado) ──
   - python=3.10.19

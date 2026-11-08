@@ -1,6 +1,6 @@
 {
-  "_comment": "Run with a FILM on the tip side: requires a mesh with include_film_tip=true (create it with the mesher, GUI or geom.json). The 'films' block assigns the fixed charge of each film present in the mesh; its order = ramp order. 'type' uses the catalog (0.66M/1M/2M/4M) or 'molar_charge' a free value in M. NOTE: highly charged film + dilute electrolyte may not converge -> raise n_steps and/or n_steps_film (see README).",
-  "mesh": "../1_mallador/mallas/film_demo/film_demo_limites.json",
+  "_comment": "Run with a FILM on the tip side: requires a mesh with include_film_tip=true: by default the committed demo RESULTS/meshes/demo-conical_tipfilm (or create one with the mesher, GUI or geom.json). Run from 2_solver/. The 'films' block assigns the fixed charge of each film present in the mesh; its order = ramp order. 'type' uses the catalog (0.66M/1M/2M/4M) or 'molar_charge' a free value in M. NOTE: highly charged film + dilute electrolyte may not converge -> raise n_steps and/or n_steps_film (see README).",
+  "mesh": "../RESULTS/meshes/demo-conical_tipfilm/demo-conical_tipfilm_limits.json",
   "params": {
     "salt": "KCl",
     "c0_mM": 100.0,

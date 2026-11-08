@@ -160,7 +160,6 @@ the full pore, with a 1:1 aspect ratio.
 2. **Blocker annotation: pending.** The axial profiles used to mark the band of
    a blocker (solid obstacle in the channel). It was removed from the v1 release
    because the public mesher does not generate blockers yet; it will be re-added
-   when the blocker enters the mesher and the solver (see `TODO(blocker)` in the
-   `axial_profiles/` modules).
+   when the blocker enters the mesher and the solver (planned for v1.2).
 3. **Discretization and integration of the cross-section average profile $\langle c \rangle(z)$.** The computation lives ONCE in `section_avg_concentration.perfil_promedio_seccion()` (called by the console and the GUI) and uses a fixed sampling of `N_Z = 200` uniform axial slices with a radial integral by the trapezoidal rule (`N_R = 35`, linear triangular interpolation). **Planned improvement:** replace the uniform sampling with the real $z$ heights of the mesh nodes in the channel and integrate radially via high-order Gauss-Legendre quadrature, removing fixed constants and taking advantage of the native mesh resolution.
 4. **Cross-section average electrostatic potential $\langle \phi \rangle(z)$.** Currently the section-averaged 1D profiles compute only the mean ionic concentrations $\langle c_+ \rangle(z)$ and $\langle c_- \rangle(z)$. **Planned improvement:** add the optional computation of the mean electrostatic potential $\langle \phi \rangle(z) = \frac{2}{R(z)^2} \int_0^{R(z)} \phi(z,r) r dr$ for analysis in 1D area-averaged theories and global energy balance.
