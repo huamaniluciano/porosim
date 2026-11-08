@@ -19,8 +19,8 @@
                                             -1.0,0.0,0.5    several (the mesh is
                                                             loaded ONLY once)
                                             all             all of the .h5
-                                        (solution_summary and precipitation_onset
-                                        do not use --voltage)
+                                        (solution_summary, precipitation_onset
+                                        and iv_metrics do not use --voltage)
                                         --opt key=value (repeatable) passes an
                                         option to the module's guardar(), e.g.
                                             --opt factor=10 --opt estilo=ternary

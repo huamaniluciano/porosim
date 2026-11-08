@@ -160,7 +160,7 @@ def pendiente_local(V, I):
 def metricas(V, I, ventana_n=VENTANA_N, v_ref=V_REF, v_g0=V_G0):
     """Todas las métricas de una curva I-V (V en V, I en nA). Las que no se
     pueden calcular (rama ausente, ventana sin puntos) quedan en None."""
-    ventana_n = tuple(float(x) for x in ventana_n)
+    ventana_n = tuple(float(x) for x in np.atleast_1d(ventana_n))
     if len(ventana_n) != 2 or not 0 < ventana_n[0] < ventana_n[1]:
         raise ValueError(f"ventana_n must be two voltages 0 < a < b, got {ventana_n}")
     v_ref, v_g0 = float(v_ref), float(v_g0)

@@ -401,11 +401,13 @@ def ctx_v(v_label):
 # (no usa los módulos: lee IV_curve_*.txt, contrato directo del solver)
 # =============================================================================
 def cargar_curva_iv(carpeta):
-    candidatos = sorted(carpeta.glob("curva_IV*.txt")) or sorted(carpeta.glob("*IV*.txt"))
-    if not candidatos:
+    # Mismo criterio que iv_metrics (IV_curve_*.txt, o curva_IV*.txt viejo):
+    # un "*IV*.txt" genérico agarraría también las salidas de iv_metrics.
+    ruta_iv = iv_metrics.buscar_iv(carpeta)
+    if ruta_iv is None:
         return None
     try:
-        datos = np.atleast_2d(np.loadtxt(candidatos[0], skiprows=1))
+        datos = np.atleast_2d(np.loadtxt(ruta_iv, skiprows=1))
         return datos[datos[:, 0].argsort()]
     except Exception:
         return None
