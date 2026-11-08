@@ -182,7 +182,8 @@ def panel_grafico(key, dibujar, carpeta_sol, nombre_base, datos=None):
 
         buf = io.BytesIO()
         try:
-            fig.savefig(buf, format=fmt, dpi=dpi, bbox_inches="tight", pad_inches=0.05)
+            with plt.rc_context(pc.RC_EDITABLE):      # PDF/SVG: texto editable
+                fig.savefig(buf, format=fmt, dpi=dpi, bbox_inches="tight", pad_inches=0.05)
         except Exception as e:
             st.error(f"Could not render the image: {e}")
             buf = None
@@ -763,6 +764,22 @@ with tab_local:
                     con_campo = st.checkbox("Overlay field lines E = −∇φ", value=True)
                 with col_f2:
                     zoom_local = st.checkbox("Zoom in on channel tip", value=True)
+                col_f3, col_f4, col_f5 = st.columns([2, 1, 1])
+                escala_fija = col_f3.checkbox(
+                    "Fixed color scale (compare voltages / runs)", value=False,
+                    key="pot__fija",
+                    help="0 V = white and ±φ_ref = the ends of the color map in "
+                         "every figure, so the same color is the same voltage. "
+                         "φ_ref is the CEILING of the scale: pick it ≥ |φ|max of "
+                         "every figure you compare (above it the color saturates).")
+                phi_ref_in = col_f4.number_input("φ_ref [V]", min_value=0.01,
+                                                 max_value=50.0, value=1.0, step=0.05,
+                                                 format="%.2f", key="pot__phi_ref")
+                gamma_in = col_f5.number_input("Color gamma", min_value=0.1,
+                                               max_value=3.0, value=1.0, step=0.1,
+                                               format="%.2f", key="pot__gamma",
+                                               help="1 = linear; < 1 lifts small "
+                                                    "|φ| off white faster.")
                 btn_pot = st.form_submit_button(f"🧮 Compute and Plot ({v_label} V)", type="primary", use_container_width=True)
 
             if btn_pot:
@@ -776,6 +793,11 @@ with tab_local:
                 phi_V  = extraer_campos(h5_path, mtime, v_label)["phi_adim"] * V_T
                 d_pot  = {"z_nm": dm["z_nm"], "r_nm": dm["r_nm"], "tri": dm["tri"],
                           "phi_V": phi_V}
+                phi_ref = phi_ref_in if escala_fija else None
+                if phi_ref is not None and float(np.abs(phi_V).max()) > phi_ref:
+                    st.warning(f"|φ|max = {np.abs(phi_V).max():.3f} V exceeds the "
+                               f"fixed scale ceiling ±{phi_ref:g} V: everything "
+                               f"above it gets the same color. Raise φ_ref.")
 
                 # Campo eléctrico cacheado (evita recalcular en cada re-run)
                 ec = None
@@ -792,7 +814,8 @@ with tab_local:
                     return potential.crear_figura(d_pot, ctxv,
                                                   con_campo=(ec is not None),
                                                   leyenda=leyenda, campo=ec,
-                                                  xlim=xlim, ylim=ylim)
+                                                  xlim=xlim, ylim=ylim,
+                                                  phi_ref=phi_ref, gamma=gamma_in)
 
                 panel_grafico("pot2d", dibujar_potencial, carpeta_sol,
                               f"{stem}_potential2D_{v_label}V")

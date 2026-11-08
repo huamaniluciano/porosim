@@ -184,13 +184,17 @@ def dibujar_lineas_campo(ax, Z, R, Ez, Er, density=0.7, color="0.55",
 # =============================================================================
 def crear_figura(datos, ctx, con_campo=False, leyenda=True,
                  ylim=None, xlim=None, titulo=True, figsize=None,
-                 campo=None):
+                 campo=None, phi_ref=None, gamma=1.0):
     """campo: dict {Z, R_full, Ez, Er} ya calculado (p.ej. cacheado por la
-    GUI). Si es None y con_campo=True, se calcula acá con campo_electrico()."""
+    GUI). Si es None y con_campo=True, se calcula acá con campo_electrico().
+    phi_ref [V] (v1.1.0): escala de color FIJA ±phi_ref para comparar
+    corridas (None = adaptativa, la de siempre); gamma la curva del color.
+    Ver pc.escala_potencial."""
     z_nm, r_nm, tri, phi_V = (datos["z_nm"], datos["r_nm"],
                               datos["tri"], datos["phi_V"])
     z2, r2, tri2, phi2 = pc.espejo(z_nm, r_nm, tri, phi_V)
-    norm, niveles = pc.escala_potencial(phi_V, ctx.get("V_T"))
+    norm, niveles = pc.escala_potencial(phi_V, ctx.get("V_T"),
+                                        phi_ref=phi_ref, gamma=gamma)
     es_zoom = (xlim is not None) or (ylim is not None)
 
     # Con zoom se ignora el campo cacheado (grilla de todo el dominio, ~90 nm
@@ -227,7 +231,8 @@ def crear_figura(datos, ctx, con_campo=False, leyenda=True,
                           color="0.55", density=1.4, linewidth=0.8,
                           arrowsize=1.0, arrowstyle="->")
     cbar = fig.colorbar(im, ax=ax)
-    cbar.set_label("Potential [V]")
+    cbar.set_label("Potential [V]" if phi_ref is None
+                   else f"Potential [V]  (fixed scale ±{float(phi_ref):g} V)")
     pc.ticks_colorbar(cbar, niveles[0], niveles[-1])
     pc.marcar_colorbar(cbar)
 
@@ -268,15 +273,18 @@ def preparar(ruta_solucion, v_label=None, sol=None,
 
 
 def guardar(datos, ctx, ruta_solucion, png=True, con_datos=False,
-            con_campo=False, sufijo="potential_map"):
+            con_campo=False, sufijo="potential_map", phi_ref=None, gamma=1.0):
     """Mapa limpio publication-ready (mismo output que el '¿Guardar mapa
     limpio?' de consola): {stem}_{sufijo}_{V}V.png. Sin datos tabulares
     (con_datos se acepta por uniformidad del contrato y se ignora).
-    `con_campo`/`sufijo` permiten a field_lines reusar este guardar."""
+    `con_campo`/`sufijo` permiten a field_lines reusar este guardar.
+    Batch: --opt phi_ref=1.2 [--opt gamma=0.7] → escala de color fija, la
+    misma en todas las figuras (comparables entre voltajes y corridas)."""
     rutas = []
     if png:
         figc = crear_figura(datos, ctx, con_campo=con_campo, leyenda=False,
-                            titulo=False, figsize=(10, 4))
+                            titulo=False, figsize=(10, 4),
+                            phi_ref=phi_ref, gamma=gamma)
         stem = pathlib.Path(ruta_solucion).stem
         rutas.append(pc.guardar_figura(
             figc, ruta_solucion, f"{stem}_{sufijo}_{ctx['v_label']}V.png",

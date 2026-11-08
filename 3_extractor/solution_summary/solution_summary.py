@@ -26,6 +26,7 @@ Ver README.md (Pilar 3) para el detalle de los módulos.
 import io
 import json
 import pathlib
+import sys
 from contextlib import redirect_stdout
 
 import numpy as np
@@ -566,6 +567,16 @@ def preparar(ruta_solucion, v_label=None, sol=None):
             {"stem": ruta_solucion.stem, "v_label": None})
 
 
+def _pc():
+    """porosim_comun (guardado estándar: dpi, texto editable, --format). Se
+    importa recién al guardar: el resumen no depende de él para leer."""
+    modulos = str(pathlib.Path(__file__).resolve().parents[1] / "modulos")
+    if modulos not in sys.path:
+        sys.path.insert(0, modulos)
+    import porosim_comun
+    return porosim_comun
+
+
 def guardar(datos, ctx, ruta_solucion, png=True, con_datos=False):
     """PNG de la curva I-V + esquema del canal, y el reporte de texto como
     {stem}_summary.txt. El reporte se guarda SIEMPRE (es el output principal
@@ -581,11 +592,7 @@ def guardar(datos, ctx, ruta_solucion, png=True, con_datos=False):
                              f"{stem}_channel_schematic.png")):
             if fig is None:
                 continue
-            fpath = carpeta / nombre
-            fig.savefig(fpath, dpi=300, bbox_inches="tight", pad_inches=0.05)
-            plt.close(fig)
-            print(f"    ✓ Saved: {fpath}")
-            rutas.append(fpath)
+            rutas.append(_pc().guardar_figura(fig, ruta_solucion, nombre))
 
     buf = io.StringIO()
     with redirect_stdout(buf):

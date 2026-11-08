@@ -53,10 +53,11 @@ def preparar(ruta_solucion, v_label=None, sol=None):
                               titulo="ELECTRIC FIELD LINES")
 
 
-def guardar(datos, ctx, ruta_solucion, png=True, con_datos=False):
+def guardar(datos, ctx, ruta_solucion, png=True, con_datos=False,
+            phi_ref=None, gamma=1.0):
     return potential.guardar(datos, ctx, ruta_solucion, png=png,
                              con_datos=con_datos, con_campo=True,
-                             sufijo="field_lines")
+                             sufijo="field_lines", phi_ref=phi_ref, gamma=gamma)
 
 
 # =============================================================================

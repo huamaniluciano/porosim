@@ -44,6 +44,27 @@ T_DEFAULT_K = 298.15
 
 KPS_LEGACY_M2 = 1.07e-2   # KClO4 a 25 °C — fallback para _sim.json legacy
 
+# ─── Exportación de figuras (v1.1.0) ────────────────────────────────────────
+# Texto EDITABLE en los formatos vectoriales: PDF/EPS con la fuente TrueType
+# embebida (fonttype 42, no curvas Type 3) y SVG con <text> en vez de trazos.
+# Lo usan guardar_figura() (batch/consola) y el panel de exportación de la GUI.
+RC_EDITABLE = {"pdf.fonttype": 42, "ps.fonttype": 42, "svg.fonttype": "none"}
+
+# Formato de los archivos de guardar_figura(): "png" (default, el de v1.0.0),
+# "pdf" o "svg". El batch lo cambia con --format (fijar_formato).
+FORMATOS_FIGURA = ("png", "pdf", "svg")
+FORMATO_FIGURAS = "png"
+
+
+def fijar_formato(formato):
+    """Formato de salida de guardar_figura() para toda la corrida."""
+    global FORMATO_FIGURAS
+    f = str(formato).strip().lower().lstrip(".")
+    if f not in FORMATOS_FIGURA:
+        raise ValueError(f"format '{formato}' unknown: use one of {FORMATOS_FIGURA}")
+    FORMATO_FIGURAS = f
+    return f
+
 
 def voltaje_termico(T_K=T_DEFAULT_K):
     """V_T = R·T/F (~0.0257 V a 298.15 K). Des-normaliza φ: φ_V = φ_adim·V_T."""
@@ -527,13 +548,46 @@ def rectangulos_films(ax, ctx, r_max_nm, r_min_nm=None, con_labels=True):
             linewidth=0.8, edgecolor=color, linestyle="--", facecolor="none", label=label))
 
 
-def escala_potencial(phi_V, V_T=None):
+def escala_potencial(phi_V, V_T=None, phi_ref=None, gamma=1.0):
     """(norm, niveles) para los mapas de φ: escala divergente RdBu_r con el
     BLANCO SIEMPRE anclado en 0 V (el outlet está a 0 V y debe verse neutro).
-    El padding mínimo (eps) permite TwoSlopeNorm aunque el rango no cruce 0."""
+
+    phi_ref=None (default) — escala ADAPTATIVA: el color va del mínimo al
+      máximo de ESTA solución. El padding mínimo (eps) permite TwoSlopeNorm
+      aunque el rango no cruce 0. No es comparable entre figuras.
+    phi_ref=X [V] (v1.1.0, opcional) — escala FIJA para comparar corridas:
+      0 V = blanco y ±X = extremos del colormap en TODAS las figuras, así un
+      mismo tono es un mismo voltaje. X es el TECHO de la escala, no "el
+      voltaje que se ve rojo": tiene que ser ≥ |φ|max de todas las figuras
+      que se comparan; si el dato lo supera, el color satura y se avisa.
+      gamma < 1 despega del blanco más rápido (igual en las dos mitades).
+      Los niveles siguen siendo el rango del dato: color comparable, barra
+      honesta (solo muestra los voltajes que hay en esta solución)."""
     import matplotlib.colors as mcolors
     if V_T is None:
         V_T = voltaje_termico()
+    if phi_ref is not None:
+        phi_ref, gamma = float(phi_ref), float(gamma)
+        if not phi_ref > 0 or not gamma > 0:
+            raise ValueError(f"fixed potential scale: phi_ref and gamma must be > 0 "
+                             f"(got phi_ref={phi_ref}, gamma={gamma})")
+        phi_abs = float(np.abs(phi_V).max())
+        if phi_abs > phi_ref:
+            print(f"  ⚠️  |φ|max = {phi_abs:.4f} V exceeds the fixed scale ceiling "
+                  f"(±{phi_ref:g} V): everything above it gets the same color. "
+                  f"Raise phi_ref.")
+        if gamma == 1.0:
+            norm = mcolors.Normalize(vmin=-phi_ref, vmax=phi_ref)
+        else:
+            norm = mcolors.FuncNorm(
+                (lambda x: np.sign(x) * np.abs(x) ** gamma,
+                 lambda y: np.sign(y) * np.abs(y) ** (1.0 / gamma)),
+                vmin=-phi_ref, vmax=phi_ref)
+        # Micro-pad hacia afuera: ningún nodo queda fuera del nivel extremo
+        # (sin triángulos de extend, que no pasan por el norm).
+        pad = max(float(phi_V.max() - phi_V.min()), V_T) * 1e-6
+        return norm, np.linspace(phi_V.min() - pad, phi_V.max() + pad, 100)
+
     eps    = max(np.abs(phi_V).max(), V_T) * 1e-3
     phi_lo = min(phi_V.min(), -eps)
     phi_hi = max(phi_V.max(),  eps)
@@ -591,12 +645,16 @@ def guardar_figura(fig, ruta_solucion, nombre, limpio=False, dpi=300):
     """savefig estándar del extractor en la carpeta de la solución
     (dpi 300, bbox tight) + close. limpio=True → limpiar_figura() antes
     (mapas publication-ready, como el '¿Guardar mapa limpio?' de consola).
-    Devuelve el Path guardado."""
+    La extensión de `nombre` se reemplaza por FORMATO_FIGURAS (png salvo
+    --format pdf/svg en el batch); los vectoriales salen con texto editable
+    (RC_EDITABLE). Devuelve el Path guardado."""
     import matplotlib.pyplot as plt
     if limpio:
         limpiar_figura(fig)
-    fpath = pathlib.Path(ruta_solucion).parent / nombre
-    fig.savefig(fpath, dpi=dpi, bbox_inches="tight", pad_inches=0.05)
+    fpath = (pathlib.Path(ruta_solucion).parent / nombre).with_suffix(
+        "." + FORMATO_FIGURAS)
+    with plt.rc_context(RC_EDITABLE):
+        fig.savefig(fpath, dpi=dpi, bbox_inches="tight", pad_inches=0.05)
     plt.close(fig)
     print(f"    ✓ Saved: {fpath}")
     return fpath

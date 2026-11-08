@@ -37,6 +37,8 @@ strength is capped at 0.5 M so as not to leave the validity range.
 - **1D profiles** and **total_ions** (2 panels): **full** figure with axes
   and titles (the clean version is not understandable on its own).
 - **dpi = 300, bbox_inches="tight"** fixed in `pc.guardar_figura()`.
+- **Format** (v1.1.0): PNG by default; `--format pdf|svg` changes it for the
+  whole run, with editable text (`pc.RC_EDITABLE`).
 - Possible future flag `--annotated` / `--clean` in the batch if a per-run
   choice is needed; not added today so as not to bloat the CLI.
 
@@ -55,3 +57,14 @@ ever unified, do it in the `guardar()` of all modules at once.
 It used to start at 1.5 (historical value); it was aligned to `FACTOR_PAPER` so
 that console, GUI and batch show the same by default. Since v1.1.0 the console
 also asks for the map style (binary / ternary / log10) before opening it.
+
+## 6. Potential color scale: adaptive by default, fixed scale opt-in (v1.1.0)
+
+The default stays the adaptive scale of v1.0.0 (each map uses its own range,
+white at 0 V). The fixed scale (`phi_ref`, `gamma`) is opt-in because its
+ceiling depends on the set of figures being compared: there is no good
+universal value, and a ceiling below |φ|max saturates silently in other tools
+(here it warns).
+
+- **Where it lives**: `modulos/porosim_comun.py` → `escala_potencial()`.
+

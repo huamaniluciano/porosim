@@ -23,6 +23,7 @@ python launch_extractor.py <solution> <module> --voltage all                  # 
 python launch_extractor.py <solution> solution_summary                        # does not use --voltage
 python launch_extractor.py <solution> precipitation --voltage 1.0 --opt factor=10 --opt estilo=ternary
 python launch_extractor.py <solution> precipitation_onset --save-data         # reads every voltage
+python launch_extractor.py <solution> potential --voltage all --opt phi_ref=1.2 --format pdf
 python launch_extractor.py list                  # lists the modules and their --opt options
 ```
 
@@ -33,7 +34,8 @@ an option to the module's `guardar()`: the options of each module are the
 extra keyword parameters of its `guardar()`, and `list` prints them with their
 defaults. A name that is not one of them aborts with the list of valid ones.
 Values are read as numbers, `true`/`false`, `none`, or comma tuples
-(`ylim=-500,500`).
+(`ylim=-500,500`). `--format pdf` (or `svg`) saves every figure of the run in
+that format instead of PNG, with editable text (see Outputs).
 
 ## File map
 
@@ -184,8 +186,21 @@ full figure (with axes) and their data to `.txt` (and `.xlsx` for the ions
 one). `solution_summary` saves the I-V curve, the channel schematic and the
 report as `.txt`. Frozen style decisions: see [`PENDIENTES.md`](PENDIENTES.md).
 
+**Vector formats** (v1.1.0): `--format pdf|svg` in batch and the PDF/SVG
+download of the GUI keep the text editable (TrueType fonts embedded in the PDF,
+`<text>` elements in the SVG), so labels can be retouched in Corel, Illustrator
+or Inkscape.
+
 Color conventions: the potential map uses a diverging scale with **white
-anchored at 0 V** (the outlet, grounded, looks neutral). Films are marked with a
+anchored at 0 V** (the outlet, grounded, looks neutral). By default the color
+range is each solution's own (adaptive). To compare maps of different voltages
+or runs, the **fixed scale** (v1.1.0, opt-in: `--opt phi_ref=1.2` on
+`potential`/`field_lines`, the "Fixed color scale" box in the GUI) maps ±φ_ref
+to the ends of the color map in every figure, so the same color is the same
+voltage; the colorbar still spans only the data. φ_ref is the ceiling of the
+scale, not the voltage of interest: pick it ≥ |φ|max of every figure you
+compare, otherwise the color saturates (the extractor warns). `--opt gamma=0.7`
+lifts small |φ| off white faster. Films are marked with a
 red border (fixed + charge) or blue (−). All maps are mirrored in r → −r to show
 the full pore, with a 1:1 aspect ratio.
 

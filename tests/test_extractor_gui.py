@@ -11,6 +11,8 @@ on any exception, for:
   * the committed binary demo (KClO4: four views, precipitation included);
   * the same demo with the three precipitation map styles, a threshold S = 10
     and the onset-vs-voltage sweep of the full-sweep tab (v1.1.0);
+  * the same demo with the fixed potential color scale, whose saturation
+    warning must show up (v1.1.0);
   * a mixture (KCl + HCl, three ions, v1.1.0): only the potential views, and
     the axial profile offers the potential alone.
 """
@@ -111,3 +113,16 @@ def test_gui_precipitation_styles_and_onset(repo_root, fenics_stub):
         [b for b in at.button if "Compute and Plot" in str(b.label)][0].click().run()
         assert not at.exception, (opcion, [e.message for e in at.exception])
         assert any("Supersaturated nodes" in str(m.label) for m in at.metric)
+
+
+def test_gui_fixed_potential_scale(repo_root, fenics_stub):
+    at = _abrir(repo_root, repo_root / _DEMO / f"Solutions_{_STEM_DEMO}.h5")
+    vista = [v for v in [x for x in at.radio if x.key == "vista_local"][0].options
+             if "potential" in v][0]
+    [x for x in at.radio if x.key == "vista_local"][0].set_value(vista).run()
+    at.checkbox(key="pot__fija").check()
+    at.number_input(key="pot__phi_ref").set_value(0.05)
+    at.number_input(key="pot__gamma").set_value(0.7)
+    [b for b in at.button if "Compute and Plot" in str(b.label)][0].click().run()
+    assert not at.exception, [e.message for e in at.exception]
+    assert any("fixed scale ceiling" in w.value for w in at.warning)

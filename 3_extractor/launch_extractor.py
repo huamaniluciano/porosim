@@ -25,6 +25,9 @@
                                         option to the module's guardar(), e.g.
                                             --opt factor=10 --opt estilo=ternary
                                         ('list' shows each module's options)
+                                        --format pdf|svg saves the figures in
+                                        that format (editable text) instead
+                                        of PNG
 
   python launch_extractor.py <solution>  → lists the applicable modules.
   python launch_extractor.py list        → lists the available modules.
@@ -274,11 +277,13 @@ def _resolver_voltajes(voltaje, labels):
     return pedidas
 
 
-def _modo_batch(ruta_sol, nombre_modulo, voltaje, guardar_datos=False, opts=None):
+def _modo_batch(ruta_sol, nombre_modulo, voltaje, guardar_datos=False, opts=None,
+                formato="png"):
     """Corre un módulo sin prompts ni ventanas, vía su contrato
     preparar()/guardar() (ver modulos/MODULE_CONTRACT.md).
-    Siempre guarda el/los PNG; con guardar_datos exporta también las tablas.
-    opts = {clave: valor} de --opt → kwargs extra de guardar()."""
+    Siempre guarda la(s) figura(s); con guardar_datos exporta también las
+    tablas. opts = {clave: valor} de --opt → kwargs extra de guardar().
+    formato = png | pdf | svg (--format) → pc.FORMATO_FIGURAS."""
     opts = opts or {}
     ruta_solucion = _resolver_solucion(ruta_sol)
 
@@ -316,6 +321,10 @@ def _modo_batch(ruta_sol, nombre_modulo, voltaje, guardar_datos=False, opts=None
     if str(CARPETA_MODULOS) not in sys.path:
         sys.path.insert(0, str(CARPETA_MODULOS))
     import porosim_comun as pc
+    try:
+        pc.fijar_formato(formato)
+    except ValueError as e:
+        _err(f"--format: {e}")
 
     rutas = []
     if not getattr(modulo, "USA_VOLTAJE", True):
@@ -526,17 +535,26 @@ if __name__ == "__main__":
         argv = argv[:i] + argv[i + 2:]
     opts = parsear_opts(pares_opt)
 
+    formato = "png"
+    if "--format" in argv:
+        i = argv.index("--format")
+        if i + 1 >= len(argv):
+            _err("--format needs a value:  --format png | pdf | svg")
+        formato = argv[i + 1]
+        argv = argv[:i] + argv[i + 2:]
+
     if argv and argv[0] in ("list", "--list"):
         _imprimir_modulos()
     elif argv and argv[0] in ("-h", "--help", "help"):
         print(__doc__)
     elif argv and (argv[0].endswith(".h5") or pathlib.Path(argv[0]).is_dir()):
         nombre_modulo = argv[1] if len(argv) >= 2 else None
-        _modo_batch(argv[0], nombre_modulo, voltaje, guardar_datos, opts)
+        _modo_batch(argv[0], nombre_modulo, voltaje, guardar_datos, opts, formato)
     elif argv:
         _err(f"Unrecognized argument: '{argv[0]}'.\n"
              f"   python launch_extractor.py [solution.h5 [module] "
-             f"[--voltage V] [--save-data] [--opt key=value ...]]\n"
+             f"[--voltage V] [--save-data] [--opt key=value ...] "
+             f"[--format png|pdf|svg]]\n"
              f"   python launch_extractor.py list        (available modules)")
     else:
         _interactivo()

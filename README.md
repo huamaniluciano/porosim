@@ -43,7 +43,7 @@ To confirm the install, run the test suite (a few minutes; `-m "not slow"`
 skips the solver runs and takes seconds):
 
 ```bash
-python -m pytest        # expect: 92 passed
+python -m pytest        # expect: 99 passed
 ```
 
 ### 2. Run the full pipeline on the small example
