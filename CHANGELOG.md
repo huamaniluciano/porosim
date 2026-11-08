@@ -95,5 +95,5 @@ precipitation, pH and memristor papers. Runs written by v1.0.0 (`.h5`,
 First public release: mesher, PNP solver and extractor for 2D axisymmetric
 nanopores, with web GUIs, batch modes and a test suite.
 
-[1.1.0]: https://github.com/huamaniluciano/porosim/compare/v1.0.0...HEAD
+[1.1.0]: https://github.com/huamaniluciano/porosim/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/huamaniluciano/porosim/releases/tag/v1.0.0
