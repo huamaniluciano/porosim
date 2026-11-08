@@ -26,6 +26,14 @@ precipitation, pH and memristor papers. Runs written by v1.0.0 (`.h5`,
   to 8.5 %, and the old ±0.1 V points, exactly symmetric, were the linear
   response of a single Newton step. With the v1.0.0 tolerances the v1.1.0
   solver gives the old golden to the last printed digit.
+- **Solver: the adaptive voltage step never rescued a diverged step.** After
+  Newton diverged, every retry reused a solver whose LU had failed (PETSc
+  `DIVERGED_PC_FAILED`) and failed at once, even at 1/64 of the step, so the
+  sweep stopped at that voltage instead of halving the step. With the v1.0.0
+  tolerance a step almost never diverged, because one linear step was accepted.
+  With the strict tolerance, a single 0 → ±1 V step at 100 mM, or 0.2 V steps
+  at 1 mM, need the subdivision. The Newton solver is now rebuilt after a
+  failure, and a new test runs the demo with a single 1 V step.
 - **Solver: asymmetric salts had a charged bulk.** A 2:1 salt such as CaCl₂
   got c0 on both ions; it now runs with its neutral stoichiometry
   (Ca²⁺ c0, Cl⁻ 2·c0).

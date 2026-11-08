@@ -416,8 +416,10 @@ def resolver(cfg):
     def avanzar_voltaje(v_objetivo, v_desde, max_subdivisiones=MAX_SUBDIVISIONES):
         """
         Avanza de v_desde a v_objetivo subdividiendo el paso si Newton diverge.
-        Solo modifica U y bc_phi_in. No guarda nada.
+        Solo modifica U y bc_phi_in (y rehace solver_nls tras un fallo). No
+        guarda nada.
         """
+        nonlocal solver_nls
         pasos = [v_objetivo]
         v_actual = v_desde
 
@@ -432,6 +434,15 @@ def resolver(cfg):
                 v_actual = v_next
                 pasos.pop()
             except RuntimeError:
+                # Un paso que diverge deja NaN en el LU de MUMPS, y PETSc recuerda
+                # el fallo del precondicionador (DIVERGED_PC_FAILED): con el MISMO
+                # solver todo reintento fallaba en la iteración 0, aun con el paso
+                # más chico (1/64 del original), así que la subdivisión no
+                # rescataba nada y el barrido se cortaba en ese voltaje. Se usa
+                # un solver nuevo con los mismos parámetros.
+                nuevo = NonlinearVariationalSolver(problema)
+                nuevo.parameters.update(solver_nls.parameters)
+                solver_nls = nuevo
                 U.assign(U_backup)
                 bc_phi_in.val = v_actual * F_CONST / (R_GAS * T)
                 v_medio = (v_actual + v_next) / 2
