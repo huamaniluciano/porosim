@@ -5,6 +5,16 @@ version: 1.1.0
 date-released: "2026-11-08"
 license: MIT
 doi: 10.5281/zenodo.21402265
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.21402265
+    description: "Concept DOI (all versions, resolves to the latest release)"
+  - type: doi
+    value: 10.5281/zenodo.24053741
+    description: "POROSIM v1.1.0"
+  - type: doi
+    value: 10.5281/zenodo.21402266
+    description: "POROSIM v1.0.0"
 repository-code: "https://github.com/huamaniluciano/porosim"
 authors:
   - family-names: "Huamani"

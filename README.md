@@ -264,6 +264,22 @@ mixture of salts.
 
 Each pillar's `README.md` lists additional, finer-grained limitations.
 
+## How to cite
+
+If you use POROSIM in your research, please cite it. Every release is archived
+on Zenodo with its own DOI:
+
+| DOI | Points to |
+|---|---|
+| [10.5281/zenodo.21402265](https://doi.org/10.5281/zenodo.21402265) | All versions (always resolves to the latest release) |
+| [10.5281/zenodo.24053741](https://doi.org/10.5281/zenodo.24053741) | v1.1.0 |
+| [10.5281/zenodo.21402266](https://doi.org/10.5281/zenodo.21402266) | v1.0.0 |
+
+For reproducibility, cite the DOI of the version you actually ran. The
+all-versions DOI is fine for a general reference to the software. The
+**"Cite this repository"** button on GitHub (from [CITATION.cff](CITATION.cff))
+gives the reference in APA and BibTeX.
+
 ## Contributing
 
 Bug reports, questions, and contributions are welcome. See
