@@ -104,12 +104,14 @@ replicates, and remain 100% operational.
 
 ## What's new in v1.1.0
 
-- **Converged voltage sweeps.** In v1.0.0 the Newton tolerance of the voltage
-  sweep stopped after a single linearised iteration, so the I-V curve depended
-  on the voltage step (up to 22 % at ±0.1 V with 0.1 V steps, < 0.4 % at ±1 V).
-  Newton now converges at every step (about 1.75× the run time), and the
-  adaptive step subdivision, which never rescued a diverged step, works.
-  **I-V curves computed with v1.0.0 should be recomputed.** See the
+- **Better convergence of the voltage sweep near 0 V.** Newton now converges at
+  every voltage step, so the I-V curve no longer depends on the voltage step.
+  The difference with v1.0.0 is in the low-voltage points (a few % at ±0.1 V,
+  more in dilute electrolytes); at ±1 V the currents change by less than
+  0.4 %, so the rectification and the high-voltage part of the curves barely
+  move. If you use the low-voltage part of a v1.0.0 curve (e.g. the
+  conductance G0), it is worth recomputing it. Runs take about 1.75× longer,
+  and the adaptive step subdivision now rescues a step that diverges. See the
   [solver README](2_solver/README.md#architecture).
 - **Mixtures of salts** (N ions, e.g. KCl + HCl) in the solver's batch mode,
   and asymmetric salts (2:1, CaCl₂) with a neutral bulk.

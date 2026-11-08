@@ -12,16 +12,18 @@ precipitation, pH and memristor papers. Runs written by v1.0.0 (`.h5`,
 
 ### Fixed
 
-- **Solver: the I-V curve depended on the voltage step.** The Newton
+- **Solver: better convergence of the voltage sweep near 0 V.** The Newton
   tolerance of the voltage sweep, `(1e-12, 1e-8)`, stopped after one
-  linearised iteration, so currents changed with the step (up to 22 % at
-  ±0.1 V with 0.1 V steps, about 1.4 % with 0.05 V steps). It is now
+  linearised iteration, so the low-voltage currents changed with the step (up
+  to 22 % at ±0.1 V with 0.1 V steps, about 1.4 % with 0.05 V steps); at ±1 V
+  they changed by less than 0.4 %. It is now
   `(1e-20, 1e-30)`, like the equilibrium ramps (3 to 4 iterations per step,
   about 1.75× the wall time). New run parameters `tol_voltage_abs` and
   `tol_voltage_rel` reproduce v1.0.0 runs, a `newton_few_iterations` warning
   flags steps that converge in fewer than 2 iterations, and a new test checks
-  that two voltage steps give the same currents. **Curves computed with v1.0.0
-  should be recomputed.** The golden I-V of the regression test was
+  that two voltage steps give the same currents. If you use the low-voltage
+  part of a v1.0.0 curve (e.g. the conductance G0), it is worth recomputing
+  it. The golden I-V of the regression test was
   regenerated (`python tests/regenerate_golden.py`): its currents move by 0.4
   to 8.5 %, and the old ±0.1 V points, exactly symmetric, were the linear
   response of a single Newton step. With the v1.0.0 tolerances the v1.1.0

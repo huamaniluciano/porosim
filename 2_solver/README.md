@@ -95,13 +95,14 @@ sweep ±V_max with adaptive step subdivision.
 `TOL_VOLTAJE = (1e-20, 1e-30)`: the same absolute tolerance as the
 equilibrium ramps, with the relative one disabled. v1.0.0 used `(1e-12, 1e-8)`,
 which stopped Newton after a single (linearised) iteration, so the I-V curve
-depended on the voltage step (up to 22 % error at ±0.1 V with 0.1 V steps; < 0.35 %
-at ±1 V). Each step now takes 3–4 Newton iterations with quadratic convergence,
+depended on the voltage step near 0 V (up to 22 % at ±0.1 V with 0.1 V steps;
+< 0.4 % at ±1 V). Each step now takes 3–4 Newton iterations with quadratic convergence,
 about 1.75× the wall time per curve. A sanity-check warning
 (`newton_few_iterations`) flags any voltage step that converges in fewer than 2
 iterations. To reproduce a v1.0.0 run, set `"tol_voltage_abs": 1e-12` and
-`"tol_voltage_rel": 1e-8` in the batch `params`. **I-V curves computed with
-v1.0.0 should be recomputed.** For a quicker sweep, use fewer voltage points
+`"tol_voltage_rel": 1e-8` in the batch `params`. The I-V curves of v1.0.0 are
+fine at high voltage; if you use their low-voltage part (e.g. the conductance
+G0), it is worth recomputing it. For a quicker sweep, use fewer voltage points
 (`n_steps`) rather than a looser tolerance: with Newton converged, the
 currents no longer depend on the step.
 
