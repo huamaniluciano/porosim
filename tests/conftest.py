@@ -210,3 +210,33 @@ def solver_run_cylinder(repo_root, tmp_path_factory):
         "iv": iv,
         "sim_json": out_dir / f"Solutions_{_STEM_CYL}_sim.json",
     }
+
+
+@pytest.fixture(scope="session")
+def solver_run_fine(repo_root, tmp_path_factory):
+    """Same film-less case as `solver_run` but with HALF the voltage step
+    (n_steps = 5 instead of 3, i.e. 0.05 V instead of 0.1 V). A converged
+    steady-state I-V cannot depend on the step, so comparing both runs at the
+    common voltages is the regression test for the v1.0.0 voltage-tolerance bug
+    (see 2_solver/constantes.py, TOL_VOLTAJE). Returns {"dir", "iv",
+    "sim_json"}. Skips if FEniCS is not usable in this environment.
+    """
+    import json
+
+    if not _fenics_importable():
+        pytest.skip("FEniCS not usable in this environment (see T1 _require notes)")
+
+    data = repo_root / "tests" / "data"
+    params = json.loads((data / _PARAMS_LESS).read_text(encoding="utf-8"))
+    params["n_steps"] = 5
+    out_dir = tmp_path_factory.mktemp("solver_fine_out")
+    proc = _run_solver(repo_root, out_dir, data / _MESH_LESS, params)
+
+    iv = out_dir / f"IV_curve_{_STEM_LESS}.txt"
+    assert iv.is_file(), \
+        f"solver did not produce the I-V curve.\nstdout tail:\n{proc.stdout[-1500:]}"
+    return {
+        "dir": out_dir,
+        "iv": iv,
+        "sim_json": out_dir / f"Solutions_{_STEM_LESS}_sim.json",
+    }

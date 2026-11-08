@@ -82,6 +82,17 @@ The 3 stages: **(1)** surface-charge ramp σ at V=0 (strict tolerances) →
 **(1b)** volumetric-charge ramp ρ_film, sequential per film → **(2)** voltage
 sweep ±V_max with adaptive step subdivision.
 
+**Voltage-sweep tolerance (changed in v1.1.0).** Stage 2 now uses
+`TOL_VOLTAJE = (1e-20, 1e-30)`: the same absolute tolerance as the
+equilibrium ramps, with the relative one disabled. v1.0.0 used `(1e-12, 1e-8)`,
+which stopped Newton after a single (linearised) iteration, so the I-V curve
+depended on the voltage step (up to 22 % error at ±0.1 V with 0.1 V steps; < 0.35 %
+at ±1 V). Each step now takes 3–4 Newton iterations with quadratic convergence,
+about 1.75× the wall time per curve. A sanity-check warning
+(`newton_few_iterations`) flags any voltage step that converges in fewer than 2
+iterations. To reproduce a v1.0.0 run, set `"tol_voltage_abs": 1e-12` and
+`"tol_voltage_rel": 1e-8` in the batch `params`.
+
 **Equilibrium checkpoint**: stages 1+1b are deterministic (~85 MUMPS
 factorizations); the result is saved in `RESULTS/equilibria/` with the full
 parameter key and reused if the equilibrium parameters match (batch:

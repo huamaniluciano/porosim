@@ -47,7 +47,7 @@ from constantes import (
     E_CHARGE, E_NM3_TO_MOLAR, film_tipos,
     C0_DEFAULT_MM, V_MAX_DEFAULT_V, N_STEPS_DEFAULT, T_DEFAULT_K,
     EPS_R_DEFAULT, SIGMA_DEFAULT_E_NM2, SAL_DEFAULT, N_STEPS_FILM,
-    RESULTADOS_SOLUCIONES, cargar_catalogo_sales, derivar_malla,
+    TOL_VOLTAJE, RESULTADOS_SOLUCIONES, cargar_catalogo_sales, derivar_malla,
 )
 
 # Campos válidos de "params" con su default (None = obligatorio contextual).
@@ -73,6 +73,8 @@ CAMPOS_PARAMS = {
     "tol_sigma_rel":           (1e-8,               "Newton relative tolerance in the σ ramp; almost never touch"),
     "tol_film_abs":            (1e-20,              "Newton absolute tolerance in the ρ_film ramp; almost never touch"),
     "tol_film_rel":            (1e-8,               "Newton relative tolerance in the ρ_film ramp; almost never touch"),
+    "tol_voltage_abs":         (TOL_VOLTAJE[0],     "Newton absolute tolerance in the voltage sweep; v1.0.0 used 1e-12 (did not converge)"),
+    "tol_voltage_rel":         (TOL_VOLTAJE[1],     "Newton relative tolerance in the voltage sweep; 1e-30 = disabled (v1.0.0 used 1e-8)"),
 }
 
 
@@ -303,6 +305,8 @@ def _generar_batch(ruta_json, malla_override=None):
         "tol_sigma_rel":     get("tol_sigma_rel", float),
         "tol_film_abs":      get("tol_film_abs", float),
         "tol_film_rel":      get("tol_film_rel", float),
+        "tol_voltage_abs":   get("tol_voltage_abs", float),
+        "tol_voltage_rel":   get("tol_voltage_rel", float),
     }
 
     print("\n" + "="*60)

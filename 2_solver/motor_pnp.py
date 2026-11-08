@@ -41,7 +41,7 @@ from constantes import (
     R_GAS, F_CONST, EPS_0, E_CHARGE, FACTOR_AXISIM, A_TO_NA,
     LINEAR_SOLVER, NEWTON_MAX_ITER, NEWTON_REPORT, GRADO_ELEMENTO,
     TOL_EQUILIBRIO, TOL_VOLTAJE, N_STEPS_FILM, MAX_SUBDIVISIONES,
-    EQ_DIR,
+    NEWTON_MIN_ITER_VOLTAJE, EQ_DIR,
 )
 
 
@@ -163,6 +163,10 @@ def resolver(cfg):
                  float(cfg.get("tol_sigma_rel", TOL_EQUILIBRIO[1])))
     tol_film  = (float(cfg.get("tol_film_abs",  TOL_EQUILIBRIO[0])),
                  float(cfg.get("tol_film_rel",  TOL_EQUILIBRIO[1])))
+    # Barrido de voltaje: default = TOL_VOLTAJE (ver constantes.py). Se expone
+    # por cfg para reproducir corridas viejas (v1.0.0 usaba (1e-12, 1e-8)).
+    tol_voltaje = (float(cfg.get("tol_voltage_abs", TOL_VOLTAJE[0])),
+                   float(cfg.get("tol_voltage_rel", TOL_VOLTAJE[1])))
 
     z_p, z_m = sal["cation"]["z"],     sal["anion"]["z"]
     D_p, D_m = sal["cation"]["D_m2s"], sal["anion"]["D_m2s"]
@@ -361,6 +365,10 @@ def resolver(cfg):
         I_out = assemble(dot(J_e, n) * FACTOR_AXISIM * r * ds(tags["OUTLET"])) * A_TO_NA
         return I_in, I_out
 
+    # (V, iteraciones de Newton) de cada solve del barrido de voltaje, incluidos
+    # los pasos intermedios de la subdivisión. Lo usa el sanity check (3).
+    iteraciones_voltaje = []
+
     def avanzar_voltaje(v_objetivo, v_desde, max_subdivisiones=MAX_SUBDIVISIONES):
         """
         Avanza de v_desde a v_objetivo subdividiendo el paso si Newton diverge.
@@ -375,7 +383,8 @@ def resolver(cfg):
             bc_phi_in.val = v_next * F_CONST / (R_GAS * T)
 
             try:
-                solver_nls.solve()
+                n_iter, _convergio = solver_nls.solve()
+                iteraciones_voltaje.append((v_next, int(n_iter)))
                 v_actual = v_next
                 pasos.pop()
             except RuntimeError:
@@ -527,9 +536,9 @@ def resolver(cfg):
     # Guardar solución a 0 V (con σ y film, si aplica)
     hdf.write(U_zero, "/U_+0.00V")
 
-    # ETAPA 2: barrido de voltaje adaptativo (tolerancias relajadas)
-    solver_nls.parameters['newton_solver']['absolute_tolerance'] = TOL_VOLTAJE[0]
-    solver_nls.parameters['newton_solver']['relative_tolerance'] = TOL_VOLTAJE[1]
+    # ETAPA 2: barrido de voltaje adaptativo (ver TOL_VOLTAJE en constantes.py)
+    solver_nls.parameters['newton_solver']['absolute_tolerance'] = tol_voltaje[0]
+    solver_nls.parameters['newton_solver']['relative_tolerance'] = tol_voltaje[1]
     bc_phi_in.val = 0.0
 
     resultados_IV = []
@@ -541,7 +550,7 @@ def resolver(cfg):
         except Exception:
             pass
 
-    print(f"\n  [STAGE 2] Adaptive voltage sweep (abs_tol={TOL_VOLTAJE[0]}, rel_tol={TOL_VOLTAJE[1]})")
+    print(f"\n  [STAGE 2] Adaptive voltage sweep (abs_tol={tol_voltaje[0]}, rel_tol={tol_voltaje[1]})")
 
     print(f"\n    Positive branch (0V → +{V_max_V}V):")
     U.assign(U_zero)
@@ -657,6 +666,29 @@ def resolver(cfg):
     _chequear_monotonia(rama_pos, "positive")
     _chequear_monotonia(rama_neg, "negative")
 
+    # (3) Pasos de voltaje que convergieron en menos de NEWTON_MIN_ITER_VOLTAJE
+    #     iteraciones: es la firma de una tolerancia inefectiva (Newton devuelve
+    #     el paso linealizado como si fuera la solución). Ni (1) ni (2) lo
+    #     detectan: el desbalance in/out queda < 1 % aun sin converger.
+    pasos_cortos = [(v, k) for v, k in iteraciones_voltaje
+                    if k < NEWTON_MIN_ITER_VOLTAJE]
+    if pasos_cortos:
+        lista_v = ", ".join(f"{v:+.2f}V" for v, _ in pasos_cortos[:8])
+        if len(pasos_cortos) > 8:
+            lista_v += ", ..."
+        warnings_list.append({
+            "level": "warning",
+            "code":  "newton_few_iterations",
+            "v":     pasos_cortos[0][0],
+            "msg":  (f"{len(pasos_cortos)} of {len(iteraciones_voltaje)} voltage "
+                     f"steps converged in fewer than {NEWTON_MIN_ITER_VOLTAJE} "
+                     f"Newton iterations ({lista_v}). With an ineffective "
+                     f"tolerance Newton returns the linearised step as if it "
+                     f"were the solution, and the I-V then depends on the "
+                     f"voltage step. Check tol_voltage_abs / tol_voltage_rel "
+                     f"(defaults in constantes.TOL_VOLTAJE)."),
+        })
+
     if warnings_list:
         print("\n" + "!" * 64)
         print("  >>> SANITY-CHECK WARNINGS <<<")
@@ -693,6 +725,10 @@ def resolver(cfg):
             "V_max_V":      V_max_V,
             "n_steps":      n_steps,
             "charge_tags":   tags_carga,
+            # Tolerancia de Newton del barrido (trazabilidad: v1.0.0 usaba
+            # (1e-12, 1e-8), que no convergía los pasos de voltaje).
+            "tol_voltage_abs": tol_voltaje[0],
+            "tol_voltage_rel": tol_voltaje[1],
         }
     }
 

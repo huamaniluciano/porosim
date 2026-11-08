@@ -41,7 +41,18 @@ GRADO_ELEMENTO    = 1           # grado del elemento finito (P1)
 
 # Tolerancias de Newton (absoluta, relativa) según etapa:
 TOL_EQUILIBRIO    = (1e-20, 1e-8)   # rampas de σ y de ρ_film (estrictas)
-TOL_VOLTAJE       = (1e-12, 1e-8)   # barrido de voltaje (relajadas)
+# Barrido de voltaje: misma absoluta que el equilibrio y relativa desactivada.
+# La de v1.0.0 era (1e-12, 1e-8) y resultaba inefectiva: el residuo inicial de
+# cada paso es casi todo el salto de la BC de Dirichlet en INLET (así la
+# relativa equivale a ~3e-7 absoluta) y el residuo interior en SI de un estado
+# NO convergido ya es ~1e-17 < 1e-12. Newton cortaba tras 1 iteración (un paso
+# linealizado) y la I-V dependía del paso de voltaje: hasta 22 % de error a
+# ±0.1 V con pasos de 0.1 V. Con (1e-20, 1e-30) cada paso toma 3-4
+# iteraciones con convergencia cuadrática (~1.75x más tiempo por curva).
+TOL_VOLTAJE       = (1e-20, 1e-30)  # barrido de voltaje
+# Un paso de voltaje que converge en menos de estas iteraciones es sospechoso
+# (la firma del corte prematuro de arriba): se avisa en los sanity checks.
+NEWTON_MIN_ITER_VOLTAJE = 2
 
 # Pasos de las rampas:
 # N_STEPS_FILM es el default; se puede subir por corrida desde el params.json
