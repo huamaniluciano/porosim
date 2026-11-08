@@ -153,6 +153,11 @@ def crear_figura_comparativo(datos, ctx, leyenda=True,
 # =============================================================================
 # CONTRATO DEL EXTRACTOR (ver modulos/MODULE_CONTRACT.md)
 # =============================================================================
+def aplica(meta):
+    """Solo electrolitos binarios (par catión/anión con una c0)."""
+    return pc.aplica_binaria(meta)
+
+
 def preparar(ruta_solucion, v_label=None, sol=None,
              titulo="MAPA DE CONCENTRACIÓN 2D"):
     """→ (datos, ctx) o None. datos = {z_nm, r_nm, tri, cp_mM, cm_mM}.
@@ -161,10 +166,9 @@ def preparar(ruta_solucion, v_label=None, sol=None,
     if prep is None:
         return None
     sol, ctx, campos = prep
-    # Sin c0 real en el _sim.json las escalas (proporcionales a c0) mienten.
-    if sol["meta"].get("simulation", {}).get("c0_mM") is None:
-        print("❌ Missing 'c0_mM' in the _sim.json: the concentration maps "
-              "are not reliable.")
+    # Sin c0 real en el _sim.json las escalas (proporcionales a c0) mienten;
+    # una mezcla no tiene UNA c0 ni un par catión/anión.
+    if not pc.exigir_binaria(sol["meta"]):
         return None
     sal = ctx["salt"]
     dm  = sol["dm"]

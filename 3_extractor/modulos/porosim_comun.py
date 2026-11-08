@@ -98,7 +98,9 @@ def cargar_meta(carpeta_sol):
 
 def info_sal(sim):
     """Bloque "salt" del catálogo del solver, con fallback legacy (campos
-    planos electrolito/z_p/z_m de _sim.json viejos)."""
+    planos electrolito/z_p/z_m de _sim.json viejos). Una mezcla (v1.1.0,
+    "salt" = null) no tiene UNA sal: name = la etiqueta del electrolito,
+    label_p/label_m = los cationes/aniones unidos con " + ", z_p/z_m = None."""
     sal = sim.get("salt")
     if isinstance(sal, dict) and sal:
         return {
@@ -111,6 +113,18 @@ def info_sal(sim):
             "Ksp_M2":  sal.get("Ksp_M2"),
             "legacy":  False,
         }
+    iones = sim.get("ions")
+    if isinstance(iones, list) and iones:
+        return {
+            "name":    sim.get("electrolyte_label") or "mixture",
+            "label_p": " + ".join(str(i.get("symbol")) for i in iones if i.get("z", 0) > 0),
+            "label_m": " + ".join(str(i.get("symbol")) for i in iones if i.get("z", 0) < 0),
+            "z_p":     None,
+            "z_m":     None,
+            "soluble": None,
+            "Ksp_M2":  None,
+            "legacy":  False,
+        }
     return {
         "name":  sim.get("electrolito", "KCl"),
         "label_p": f"cation (z={sim.get('z_p', 1):+d})",
@@ -121,6 +135,66 @@ def info_sal(sim):
         "Ksp_M2":  None,
         "legacy":  True,
     }
+
+
+def iones_de_sim(sim):
+    """Iones de la corrida en el ORDEN de las componentes u_i de
+    U = (φ, u_1, ..., u_N): [{"symbol", "z", "D_m2s", "c0_mM"}]. Viene en
+    sim["ions"] desde v1.1.0; para un _sim.json anterior (siempre binario) se
+    arma con la sal y la c0 (c0 = 100 mM si falta, como contexto_de)."""
+    iones = sim.get("ions")
+    if isinstance(iones, list) and iones:
+        return [dict(i) for i in iones]
+    sal  = sim.get("salt") if isinstance(sim.get("salt"), dict) else {}
+    info = info_sal(sim)
+    c0   = sim.get("c0_mM", 100.0)
+    c0   = 100.0 if c0 is None else float(c0)
+    return [{"symbol": info["label_p"], "z": info["z_p"], "c0_mM": c0,
+             "D_m2s": sal.get("cation", {}).get("D_m2s")},
+            {"symbol": info["label_m"], "z": info["z_m"], "c0_mM": c0,
+             "D_m2s": sal.get("anion", {}).get("D_m2s")}]
+
+
+def es_binaria(sim):
+    """¿Es el caso de 2 iones con UNA c0 que suponen los módulos de
+    concentración (c± = c0·exp(u±))? False para una mezcla o una sal
+    asimétrica (el solver deja c0_mM = null en ambos casos)."""
+    return sim.get("c0_mM", 100.0) is not None and len(iones_de_sim(sim)) == 2
+
+
+def describir_electrolito(sim):
+    """'KCl · 100 mM' (binario) o 'KCl_100mM+HCl_10mM: K⁺ 100, Cl⁻ 110, H⁺ 10 mM'."""
+    if es_binaria(sim):
+        return f"{info_sal(sim)['name']} · {float(sim.get('c0_mM', 100.0)):g} mM"
+    iones = iones_de_sim(sim)
+    nombre = sim.get("electrolyte_label") or info_sal(sim)["name"]
+    return (f"{nombre}: " +
+            ", ".join(f"{i.get('symbol')} {float(i.get('c0_mM')):g}" for i in iones) + " mM")
+
+
+SOLO_BINARIA = ("this module draws the cation/anion pair of a binary electrolyte. "
+                "For a mixture (or an asymmetric salt) use the potential map, "
+                "the field lines, the axial potential profile and the I-V.")
+
+
+def aplica_binaria(meta):
+    """aplica() de los módulos de concentración (mapas de iones, perfiles de
+    iones, precipitación): solo electrolitos binarios."""
+    return es_binaria(meta.get("simulation", {}))
+
+
+def exigir_binaria(meta):
+    """Para el preparar() de esos módulos: True si la corrida es binaria con
+    c0 conocida; si no, imprime el motivo y devuelve False."""
+    sim = meta.get("simulation", {})
+    if sim.get("ions") and not es_binaria(sim):
+        print(f"❌ {describir_electrolito(sim)}: {SOLO_BINARIA}")
+        return False
+    if sim.get("c0_mM") is None:
+        print("❌ Missing 'c0_mM' in the _sim.json: the concentration maps "
+              "are not reliable.")
+        return False
+    return True
 
 
 def films_activos_de(meta):
@@ -150,15 +224,20 @@ def contexto_de(meta, stem, v_label=None):
     Lo construyen igual el procesar() de consola y la GUI: misma figura.
 
     Claves: stem, v_label, v_num, c0 (mM), T_K, V_T (V), sal (dict de
-    info_sal), z_tip/z_base/R_tip/R_base (m), films, sigma_Cm2."""
+    info_sal), z_tip/z_base/R_tip/R_base (m), films, sigma_Cm2, ions (lista
+    de iones_de_sim) y binaria (es_binaria). En una mezcla c0 = None: los
+    módulos de concentración no aplican (su aplica() lo dice)."""
     sim = meta.get("simulation", {})
     sal = info_sal(sim)
     T_K = float(sim.get("T_K", T_DEFAULT_K))
+    c0  = sim.get("c0_mM", 100.0)
     return {
         "stem":      stem,
         "v_label":   v_label,
         "v_num":     float(v_label) if v_label is not None else None,
-        "c0":        float(sim.get("c0_mM", 100.0)),
+        "c0":        float(c0) if c0 is not None else None,
+        "ions":      iones_de_sim(sim),
+        "binaria":   es_binaria(sim),
         "T_K":       T_K,
         "V_T":       voltaje_termico(T_K),
         "salt":       sal,
@@ -188,11 +267,12 @@ def cargar_malla(ruta_h5):
     return mesh
 
 
-def espacio_mixto(mesh):
-    """FunctionSpace mixto P1×P1×P1 (φ, up, um) — el mismo del solver."""
+def espacio_mixto(mesh, n_iones=2):
+    """FunctionSpace mixto (φ, u_1, ..., u_N) — el mismo del solver. Con
+    n_iones=2 es el P1×P1×P1 (φ, up, um) de siempre."""
     fe = _fenics()
     P1 = fe.FiniteElement("P", mesh.ufl_cell(), 1)
-    return fe.FunctionSpace(mesh, fe.MixedElement([P1, P1, P1]))
+    return fe.FunctionSpace(mesh, fe.MixedElement([P1] * (1 + int(n_iones))))
 
 
 def detectar_voltajes(ruta_h5, mesh, sim=None):
@@ -234,7 +314,9 @@ def normalizar_v_label(texto):
 
 def leer_campos(ruta_h5, mesh, V, v_label):
     """Arrays NumPy en los vértices para un voltaje: φ adimensional y los
-    log-potenciales up/um (c = c0·exp(u)). El HDF5File se cierra siempre."""
+    log-potenciales de cada ion, "us" = [u_1, ..., u_N] (c_i = c0_i·exp(u_i)).
+    Con 2 iones también "up"/"um" (los nombres de siempre). El HDF5File se
+    cierra siempre. V tiene que tener 1 + N campos (espacio_mixto)."""
     fe = _fenics()
     U = fe.Function(V)
     with stderr_silencioso():
@@ -243,10 +325,12 @@ def leer_campos(ruta_h5, mesh, V, v_label):
             hdf.read(U, f"/U_{v_label}V")
         finally:
             hdf.close()
-    phi, up, um = U.split(deepcopy=True)
-    return {"phi_adim": phi.compute_vertex_values(mesh),
-            "up":       up.compute_vertex_values(mesh),
-            "um":       um.compute_vertex_values(mesh)}
+    phi, *us = U.split(deepcopy=True)
+    campos = {"phi_adim": phi.compute_vertex_values(mesh),
+              "us":       [u.compute_vertex_values(mesh) for u in us]}
+    if len(us) == 2:
+        campos["up"], campos["um"] = campos["us"]
+    return campos
 
 
 def datos_malla(mesh):
@@ -274,10 +358,11 @@ def cargar_solucion(ruta_h5):
     ruta_h5 = pathlib.Path(ruta_h5)
     meta = cargar_meta(ruta_h5.parent)
     mesh = cargar_malla(ruta_h5)
+    n_iones = len(iones_de_sim(meta.get("simulation", {})))
     return {"ruta":   ruta_h5,
             "meta":   meta,
             "mesh":   mesh,
-            "V":      espacio_mixto(mesh),
+            "V":      espacio_mixto(mesh, n_iones),
             "dm":     datos_malla(mesh),
             "labels": detectar_voltajes(ruta_h5, mesh,
                                         meta.get("simulation", {}))}
@@ -336,7 +421,7 @@ def preparar_comun(ruta_solucion, titulo, v_label=None, sol=None):
               f"{max(film['z_int'], film['z_memb'])*1e9:.1f}] nm")
     if not ctx["films"]:
         print("  [Films] Geometry with NO films")
-    print(f"  Salt: {ctx['salt']['name']}  |  c0 = {ctx['c0']:g} mM")
+    print(f"  Electrolyte: {describir_electrolito(sol['meta'].get('simulation', {}))}")
 
     etiqueta = elegir_voltaje(sol["labels"], v_label)
     if etiqueta is None:

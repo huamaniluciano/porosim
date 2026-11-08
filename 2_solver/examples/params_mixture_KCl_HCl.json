@@ -1,0 +1,16 @@
+{
+  "_comment": "Mixture of salts (v1.1.0): KCl 100 mM + HCl 10 mM (pH ~2) on the committed demo mesh, run from 2_solver/. Ions K+ 100, Cl- 110, H+ 10 mM: U = (phi, u_K, u_Cl, u_H). 'electrolyte' replaces 'salt'/'c0_mM'. Short sweep at +-0.4 V.",
+  "mesh": "../RESULTS/meshes/demo-conical/demo-conical_limits.json",
+  "params": {
+    "electrolyte": [
+      {"salt": "KCl", "c0_mM": 100},
+      {"salt": "HCl", "c0_mM": 10}
+    ],
+
+    "sigma_e_nm2": -1.0,
+    "sigma_on_rings": true,
+
+    "V_max_V": 0.4,
+    "n_steps": 5
+  }
+}

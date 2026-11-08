@@ -35,6 +35,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.tri as mtri
 
+# np.trapz was removed in NumPy 2.4 (np.trapezoid since 2.0)
+_trapecio = getattr(np, "trapezoid", None) or np.trapz
+
 _MOD = str(pathlib.Path(__file__).resolve().parents[1])
 if _MOD not in sys.path:
     sys.path.insert(0, _MOD)
@@ -80,8 +83,8 @@ def perfil_promedio_seccion(z_nm, r_nm, tri, cp_mM, cm_mM,
 
         R_nm = R_z * 1e9
         if R_nm > 0:
-            cp_prom[i] = 2.0 / (R_nm**2) * np.trapz(cp_r * r_pts_nm, r_pts_nm)
-            cm_prom[i] = 2.0 / (R_nm**2) * np.trapz(cm_r * r_pts_nm, r_pts_nm)
+            cp_prom[i] = 2.0 / (R_nm**2) * _trapecio(cp_r * r_pts_nm, r_pts_nm)
+            cm_prom[i] = 2.0 / (R_nm**2) * _trapecio(cm_r * r_pts_nm, r_pts_nm)
         else:
             cp_prom[i], cm_prom[i] = c0, c0
 
@@ -112,6 +115,11 @@ def crear_figura(datos_prom, ctx, curvas=CURVAS_DEFAULT, leyenda=True,
 # =============================================================================
 # CONTRATO DEL EXTRACTOR (ver modulos/MODULE_CONTRACT.md)
 # =============================================================================
+def aplica(meta):
+    """Solo electrolitos binarios (par catión/anión con una c0)."""
+    return pc.aplica_binaria(meta)
+
+
 def preparar(ruta_solucion, v_label=None, sol=None):
     """→ (datos_prom, ctx) o None.
     datos_prom = {z_nm, cp_prom, cm_prom, ct_prom} (promedio en sección)."""
@@ -120,6 +128,8 @@ def preparar(ruta_solucion, v_label=None, sol=None):
     if prep is None:
         return None
     sol, ctx, campos = prep
+    if not pc.exigir_binaria(sol["meta"]):
+        return None
 
     if None in (ctx["z_tip"], ctx["z_base"], ctx["R_tip"], ctx["R_base"]):
         print("❌ Missing z_tip/z_base/R_tip/R_base in the JSON.")

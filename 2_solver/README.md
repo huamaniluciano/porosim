@@ -31,7 +31,7 @@ parameters the simulation is identical.
 
 | Role | Files |
 |---|---|
-| **Core** (physics) | `motor_pnp.py` (`resolver(cfg)`, the paper's physics) · `constantes.py` · `sales.json` · `solver.py` (batch validation + console entry) |
+| **Core** (physics) | `motor_pnp.py` (`resolver(cfg)`, the paper's physics) · `electrolito.py` (electrolyte → ions, no FEniCS) · `constantes.py` · `sales.json` · `solver.py` (batch validation + console entry) |
 | **Web GUI** | `gui_app.py` · `gui_dibujo_solver.py` (reuses `perfil_radio` from the mesher) |
 | **Launcher** | `launch_solver.py` (no args → GUI; batch delegates to `solver.py`) |
 | **Console equivalent to the GUI** | `console_backup/preguntas.py` (the prompts the GUI mimics; used by `python solver.py` with no arguments) |
@@ -42,7 +42,7 @@ parameters the simulation is identical.
 physics and a shell loop sweeps the geometries, without editing files:
 
 ```bash
-for m in ../1_mesher/meshes/*/; do
+for m in ../1_mesher/mallas/*/; do
     python solver.py my_physics.json --mesh "$m"
 done
 ```
@@ -62,9 +62,13 @@ says):
 
 | File | Content |
 |---|---|
-| `Solutions_<mesh>_<c0>mM.h5` | mesh + solution U(φ, ln c₊, ln c₋) per voltage |
-| `IV_curve_<mesh>_<c0>mM.txt` | table V / I_in / I_out [nA] |
-| `Solutions_..._sim.json` | full metadata (geometry + simulation + salt) — read by the Extractor |
+| `Solutions_<mesh>_<salt>_<c0>mM.h5` | mesh + solution U(φ, ln c₊, ln c₋) per voltage |
+| `IV_curve_<mesh>_<salt>_<c0>mM.txt` | table V / I_in / I_out [nA] |
+| `Solutions_..._sim.json` | full metadata (geometry + simulation + salt + `ions`) — read by the Extractor |
+
+A mixture is labelled by its salts, e.g. `Solutions_<mesh>_KCl_100mM+HCl_10mM.h5`,
+and its U has one log-concentration per ion: U(φ, ln c₁, …, ln c_N), in the
+order of `simulation.ions` of the `_sim.json`.
 
 ## Architecture
 
@@ -73,8 +77,10 @@ solver.py       entry: 2 modes + help + params.json validation
 constantes.py   §1-3 of the original solver: universal physics, numerical
                 knobs (Newton/MUMPS/tolerances), catalogs and defaults
 preguntas.py    §4-5: the interactive flow (same texts) → produces cfg
-motor_pnp.py    §6: the PHYSICS (untouched) — resolver(cfg): loads mesh,
-                assembles PNP, 3 stages, exports
+motor_pnp.py    §6: the PHYSICS — resolver(cfg): loads mesh, assembles PNP
+                for N ions (2 for a binary salt), 3 stages, exports
+electrolito.py  electrolyte → list of ions (stoichiometry, mixtures, numeric
+                Donnan); pure Python, used by the batch validation and tests
 sales.json      salt catalog (valences, D, solubility, Ksp)
 ```
 
@@ -114,7 +120,7 @@ complete example (see `examples/`):
 
 ```json
 {
-  "mesh": "../1_mesher/meshes/conico_chico/conico_chico_domain.xdmf",
+  "mesh": "../1_mesher/mallas/conico_chico/conico_chico_domain.xdmf",
   "params": {
     "salt": "KCl",
     "c0_mM": 100.0,
@@ -145,6 +151,38 @@ complete example (see `examples/`):
   *(Note: adding a permanent salt to the general catalog is as simple as adding
   an entry to `sales.json`, without touching a single line of code.)*
 
+  A salt with z₊ ≠ −z₋ (like the 2:1 example above) runs with its neutral
+  stoichiometry: `c0_mM` is the salt concentration, so the bulk holds c0 of
+  the cation and 2·c0 of the anion. v1.0.0 put c0 on both ions, which leaves an
+  asymmetric salt with a charged bulk; symmetric salts (KCl, NaCl, MgSO₄, …)
+  are unchanged.
+
+### Mixtures of salts (v1.1.0)
+
+`"electrolyte"` replaces `"salt"`/`"c0_mM"` (batch mode only):
+
+```json
+"params": {
+  "electrolyte": [{"salt": "KCl", "c0_mM": 100}, {"salt": "HCl", "c0_mM": 10}],
+  "sigma_e_nm2": -1.0
+}
+```
+
+Each salt brings its ions with its stoichiometry, and an ion shared by two
+salts (same symbol) is summed: here K⁺ 100, Cl⁻ 110 and H⁺ 10 mM, so the solver
+solves U = (φ, u_K, u_Cl, u_H) with one Nernst-Planck equation per ion. A shared
+ion must carry the same z and D in both salts. The bulk must be electroneutral,
+the films get a numeric Donnan reference, and the equilibrium checkpoint key
+holds the ion list. `HCl` and `KOH` are in the catalog for pH scenarios; see
+`examples/params_mixture_KCl_HCl.json`.
+
+With a single symmetric salt the solver builds exactly the v1.0.0 forms (the
+UFL signatures of the residual, the Jacobian and the current coincide), with
+the same file names, checkpoint key and `_sim.json` fields plus the new `ions`
+list. The test `tests/test_solver_mixture.py` checks KCl 100 + HCl 10 mM against
+the binary salt it is equivalent to (110 mM with the averaged cation
+diffusivity, because K⁺ and H⁺ keep their bulk ratio everywhere).
+
 
 ## Known limitations
 
@@ -162,3 +200,7 @@ complete example (see `examples/`):
 3. The sweep cuts the branch (does not abort the run) if a point does not
    converge even by subdividing: the I-V curve stops at the last converged
    voltage.
+4. **Mixtures: batch only.** The GUI and the console take one salt. The
+   Extractor draws the potential (map, field lines, axial profile), the summary
+   and the I-V of a mixture; its concentration maps, ion profiles and
+   precipitation still assume one cation/anion pair and skip mixtures.

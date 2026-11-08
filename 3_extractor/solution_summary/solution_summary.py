@@ -156,6 +156,27 @@ def _imprimir_simulacion(meta):
     if not sim:
         print("  (no 'simulation' section in the JSON)")
         return
+    # Mezcla de N iones (v1.1.0): "c0_mM" = null y la lista "ions" manda.
+    iones = sim.get("ions")
+    if isinstance(iones, list) and iones and sim.get("c0_mM") is None:
+        print(f"  Electrolyte        = {sim.get('electrolyte_label') or 'mixture'}"
+              f"  ({len(iones)} ions)")
+        for entrada in sim.get("electrolyte") or []:
+            print(f"     salt {entrada.get('salt', '?')}: {entrada.get('c0_mM', '?')} mM")
+        for ion in iones:
+            z, c0_i = ion.get("z"), ion.get("c0_mM")
+            z_txt  = f"{int(z):+d}" if isinstance(z, (int, float)) else "?"
+            c0_txt = f"{c0_i:g}" if isinstance(c0_i, (int, float)) else "?"
+            print(f"     {str(ion.get('symbol', '?')):<8} z = {z_txt}  "
+                  f"c0 = {c0_txt} mM  D = {ion.get('D_m2s', '?')} m²/s")
+        sigma = sim.get("sigma_Cm2")
+        if sigma is not None:
+            print(f"  Surface charge     σ = {sigma:.4f} C/m²")
+        print(f"  Temperature     T  = {sim.get('T_K', '?')} K")
+        print(f"  Dielectric const εr = {sim.get('eps_r', '?')}")
+        print(f"  Maximum voltage    ±{sim.get('V_max_V', '?')} V "
+              f"({sim.get('n_steps', '?')} points per branch)")
+        return
     # Sal: bloque "salt" del catálogo; fallback legacy a campos planos sueltos.
     sal = sim.get("salt")
     if sal is not None:
@@ -188,7 +209,7 @@ def _imprimir_simulacion(meta):
     print(f"  Valences           z+ = {z_p} ({sim_p}), z- = {z_m} ({sim_m})")
     print(f"  Diffusivities      D+ = {D_p} m²/s, D- = {D_m} m²/s")
     print(f"  Maximum voltage    ±{sim.get('V_max_V', '?')} V "
-          f"({sim.get('n_steps', '?')} puntos por rama)")
+          f"({sim.get('n_steps', '?')} points per branch)")
 
 
 def _imprimir_films(meta):
@@ -254,6 +275,13 @@ def _texto_info_iv(meta):
 
     # Electrolito: nombre de la sal (formato nuevo) o legacy 'electrolito'.
     sal = sim.get("salt")
+    iones = sim.get("ions")
+    if isinstance(iones, list) and iones and sim.get("c0_mM") is None:
+        # Mezcla (v1.1.0): etiqueta + c0 de cada ion
+        lineas.append(f"Electrolyte: {sim.get('electrolyte_label') or 'mixture'}")
+        lineas.append("  " + ", ".join(f"{i.get('symbol', '?')} {float(i.get('c0_mM') or 0):g}"
+                                        for i in iones) + " mM")
+        return lineas
     if isinstance(sal, dict):
         lineas.append(f"Electrolyte: {sal.get('name', '?')}")
     elif sim.get("electrolito") is not None:

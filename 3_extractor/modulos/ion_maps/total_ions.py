@@ -92,6 +92,11 @@ def crear_figura(datos, ctx, con_fuerza_ionica=True, leyenda=True,
 # =============================================================================
 # CONTRATO DEL EXTRACTOR (ver modulos/MODULE_CONTRACT.md)
 # =============================================================================
+def aplica(meta):
+    """Solo electrolitos binarios (par catión/anión con una c0)."""
+    return pc.aplica_binaria(meta)
+
+
 def preparar(ruta_solucion, v_label=None, sol=None):
     """Mismos datos que ions.py (cp/cm nodales); solo cambia el banner."""
     return ions.preparar(ruta_solucion, v_label, sol,

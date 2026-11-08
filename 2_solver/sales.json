@@ -16,6 +16,20 @@
       "soluble": false,
       "Ksp_M2": 1.07e-2
     },
+    "HCl": {
+      "name": "HCl",
+      "cation": { "symbol": "H⁺",   "z":  1, "D_m2s": 9.31e-9 },
+      "anion":  { "symbol": "Cl⁻",  "z": -1, "D_m2s": 2.03e-9 },
+      "soluble": true,
+      "Ksp_M2": null
+    },
+    "KOH": {
+      "name": "KOH",
+      "cation": { "symbol": "K⁺",   "z":  1, "D_m2s": 1.96e-9 },
+      "anion":  { "symbol": "OH⁻",  "z": -1, "D_m2s": 5.27e-9 },
+      "soluble": true,
+      "Ksp_M2": null
+    },
     "NaCl": {
       "name": "NaCl",
       "cation": { "symbol": "Na⁺",  "z":  1, "D_m2s": 1.33e-9 },

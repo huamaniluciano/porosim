@@ -85,6 +85,11 @@ def crear_figura(datos, ctx, curvas=CURVAS_DEFAULT, leyenda=True,
 # =============================================================================
 # CONTRATO DEL EXTRACTOR (ver modulos/MODULE_CONTRACT.md)
 # =============================================================================
+def aplica(meta):
+    """Solo electrolitos binarios (par catión/anión con una c0)."""
+    return pc.aplica_binaria(meta)
+
+
 def preparar(ruta_solucion, v_label=None, sol=None):
     """→ (datos, ctx) o None.
     datos = {z_axis_nm, cp_ax_mM, cm_ax_mM, ct_ax_mM} (nodos del eje)."""
@@ -93,6 +98,8 @@ def preparar(ruta_solucion, v_label=None, sol=None):
     if prep is None:
         return None
     sol, ctx, campos = prep
+    if not pc.exigir_binaria(sol["meta"]):
+        return None
     dm = sol["dm"]
     ai = dm["axis_idx"]
     cp = ctx["c0"] * np.exp(campos["up"][ai])

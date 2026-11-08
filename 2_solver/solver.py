@@ -49,6 +49,7 @@ from constantes import (
     EPS_R_DEFAULT, SIGMA_DEFAULT_E_NM2, SAL_DEFAULT, N_STEPS_FILM,
     TOL_VOLTAJE, RESULTADOS_SOLUCIONES, cargar_catalogo_sales, derivar_malla,
 )
+import electrolito
 
 # Campos válidos de "params" con su default (None = obligatorio contextual).
 # La ayuda se genera de esta tabla, así no puede desincronizarse del código.
@@ -57,6 +58,7 @@ CAMPOS_PARAMS = {
     "c0_mM":                   (C0_DEFAULT_MM,      "bulk concentration [mM], symmetric on both sides"),
     "c0_inlet_mM":             (None,               "optional; MUST equal c0_mM (gradient not implemented in v1)"),
     "c0_outlet_mM":            (None,               "optional; same as c0_inlet_mM"),
+    "electrolyte":             (None,               'MIXTURE, replaces salt/c0_mM: [{"salt": "KCl", "c0_mM": 100}, {"salt": "HCl", "c0_mM": 10}]; an ion shared by two salts is summed'),
     "sigma_e_nm2":             (SIGMA_DEFAULT_E_NM2,"wall surface charge [e/nm²] (negative = negative wall)"),
     "sigma_on_rings":        (True,               "also apply σ on the membrane rings (if any)"),
     "T_K":                     (T_DEFAULT_K,        "temperature [K]"),
@@ -101,8 +103,17 @@ def _mostrar_ayuda():
   "output": subfolder of RESULTS/solutions/ by default; a relative (to cwd)
             or absolute path replaces it.
 
+  MIXTURES (v1.1.0): "electrolyte" instead of "salt"/"c0_mM", e.g.
+    "electrolyte": [{{"salt": "KCl", "c0_mM": 100}}, {{"salt": "HCl", "c0_mM": 10}}]
+    → ions K⁺ 100, Cl⁻ 110, H⁺ 10 mM; U = (φ, u_K, u_Cl, u_H). Batch mode only.
+    Each salt brings its neutral stoichiometry (CaCl2 10 mM → Ca²⁺ 10, Cl⁻ 20),
+    also when it is the only one, or when it is given as "salt" + "c0_mM".
+
   KNOWN LIMITATIONS (see README):
     · Concentration gradient: NOT implemented (c_inlet ≠ c_outlet → error).
+    · Mixtures: the GUI/console take a single salt; the extractor draws the
+      potential (maps, field lines, axial profile) and the I-V of a mixture,
+      not its concentration maps/profiles nor the precipitation.
     · Highly charged film + very dilute electrolyte: raise n_steps and/or
       n_steps_film (slower ramps) if it does not converge or the IV collapses.
 
@@ -164,9 +175,34 @@ def _resolver_sal(valor):
         for ion in ("cation", "anion"):
             if not {"z", "D_m2s"} <= set(valor[ion]):
                 _err(f'The custom salt needs "{ion}": {{"z": ..., "D_m2s": ...}}')
-            valor[ion].setdefault("symbol", f"{ion}(z={valor[ion]['z']:+d})")
+            valor[ion].setdefault("symbol", f"{ion}(z={valor[ion]['z']:+g})")
         return valor
     _err('"salt" must be a catalog name (string) or a custom dict.')
+
+
+def _resolver_electrolito(lista):
+    """
+    "electrolyte" of params.json → (ions, info, label) for the engine
+    (electrolito.combinar_sales: each salt with its neutral stoichiometry; an
+    ion shared by two salts, same symbol, is summed and must carry the same z
+    and D in both).
+    """
+    if not isinstance(lista, list) or not lista:
+        _err('"electrolyte" must be a non-empty list: '
+             '[{"salt": "KCl", "c0_mM": 100}, {"salt": "HCl", "c0_mM": 10}]')
+    entradas = []
+    for k, entrada in enumerate(lista):
+        if not isinstance(entrada, dict) or set(entrada) != {"salt", "c0_mM"}:
+            _err(f'"electrolyte"[{k}] must be {{"salt": ..., "c0_mM": ...}}; got {entrada!r}')
+        try:
+            c = float(entrada["c0_mM"])
+        except (TypeError, ValueError):
+            _err(f'"electrolyte"[{k}]: c0_mM must be a number; got {entrada["c0_mM"]!r}')
+        entradas.append((_resolver_sal(entrada["salt"]), c))
+    try:
+        return electrolito.combinar_sales(entradas)
+    except ValueError as e:
+        _err(f'"electrolyte": {e}')
 
 
 def _resolver_films(films_json, meta_geo):
@@ -259,17 +295,31 @@ def _generar_batch(ruta_json, malla_override=None):
         v = params.get(campo, CAMPOS_PARAMS[campo][0])
         return cast(v) if (cast and v is not None) else v
 
-    c0_mM = get("c0_mM", float)
+    mezcla = params.get("electrolyte") is not None
+    if mezcla:
+        # Modo N iones: "electrolyte" reemplaza a salt/c0_mM (no mezclar ambos)
+        choque = [k for k in ("salt", "c0_mM", "c0_inlet_mM", "c0_outlet_mM") if k in params]
+        if choque:
+            _err(f'"electrolyte" replaces {choque}: remove them from params '
+                 f'(each salt carries its own c0_mM).')
+        iones, electrolito_info, etiqueta_c = _resolver_electrolito(params["electrolyte"])
+        sal, c0_mM = None, None
+    else:
+        c0_mM = get("c0_mM", float)
 
-    # Gradiente: NO implementado en v1 — rechazar explícito y claro.
-    for lado_c in ("c0_inlet_mM", "c0_outlet_mM"):
-        v = params.get(lado_c)
-        if v is not None and float(v) != c0_mM:
-            _err(f"{lado_c} = {v} ≠ c0_mM = {c0_mM}: the concentration gradient "
-                 f"is NOT implemented in v1 (see README, limitations). "
-                 f"Use a symmetric concentration.")
+        # Gradiente: NO implementado en v1 — rechazar explícito y claro.
+        for lado_c in ("c0_inlet_mM", "c0_outlet_mM"):
+            v = params.get(lado_c)
+            if v is not None and float(v) != c0_mM:
+                _err(f"{lado_c} = {v} ≠ c0_mM = {c0_mM}: the concentration gradient "
+                     f"is NOT implemented in v1 (see README, limitations). "
+                     f"Use a symmetric concentration.")
 
-    sal        = _resolver_sal(get("salt"))
+        sal = _resolver_sal(get("salt"))
+        try:
+            iones, _modo, etiqueta_c = electrolito.iones_de_cfg({"salt": sal, "c0_mM": c0_mM})
+        except ValueError as e:
+            _err(f'"salt": {e}')
     films_cfg  = _resolver_films(get("films"), meta_geo)
     sigma_Cm2  = get("sigma_e_nm2", float) * E_CHARGE / (1e-9)**2
 
@@ -280,7 +330,8 @@ def _generar_batch(ruta_json, malla_override=None):
     # --- carpeta de salida ---
     salida = spec.get("output")
     if not salida:
-        salida = os.path.join(RESULTADOS_SOLUCIONES, f"{m_name}_{sal['name']}_{c0_mM}mM")
+        # binario: "<malla>_KCl_100.0mM" (v1.0.0) · mezcla: "<malla>_KCl_100mM+HCl_10mM"
+        salida = os.path.join(RESULTADOS_SOLUCIONES, f"{m_name}_{etiqueta_c}")
     elif not os.path.isabs(salida):
         salida = os.path.abspath(salida)   # relativa al cwd
 
@@ -308,12 +359,24 @@ def _generar_batch(ruta_json, malla_override=None):
         "tol_voltage_abs":   get("tol_voltage_abs", float),
         "tol_voltage_rel":   get("tol_voltage_rel", float),
     }
+    if mezcla:
+        del cfg["salt"], cfg["c0_mM"]
+        cfg["ions"]              = iones
+        cfg["electrolyte"]       = electrolito_info
+        cfg["electrolyte_label"] = etiqueta_c
 
     print("\n" + "="*60)
     print("   POROSIM — PNP SOLVER  (batch mode)")
     print("="*60)
     print(f"    Mesh:          {m_name}  (in {input_dir})")
-    print(f"    Electrolyte:   {sal['name']}  ({c0_mM} mM)")
+    if mezcla:
+        print(f"    Electrolyte:   MIXTURE {etiqueta_c}  →  " +
+              ", ".join(f"{i['symbol']} {i['c0_mM']:g} mM" for i in iones))
+    else:
+        print(f"    Electrolyte:   {sal['name']}  ({c0_mM} mM)")
+        if not electrolito.es_simetrica(sal):
+            print(f"                   asymmetric salt → ions " +
+                  ", ".join(f"{i['symbol']} {i['c0_mM']:g} mM" for i in iones))
     print(f"    Surf. charge:  {sigma_Cm2:.4f} C/m²"
           + (" (with rings)" if cfg["apply_charge_rings"] else " (wall only)"))
     if films_cfg:

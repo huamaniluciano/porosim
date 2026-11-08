@@ -11,11 +11,24 @@ Las fórmulas, tolerancias y el orden de las etapas son IDÉNTICOS al solver
 que generó los resultados del paper; solo cambió el empaquetado: los valores
 que antes llegaban por prompts ahora llegan en el dict `cfg`.
 
+v1.1.0: N iones (mezclas, ej. KCl + HCl). U = (φ, u_1, ..., u_N) con
+u_i = ln(c_i/c0_i); cada ion tiene su ecuación de Nernst-Planck y todos entran
+en la ρ de Poisson. Con una sal simétrica (z+ = −z−) las expresiones, los
+nombres de archivo, la clave del checkpoint y el _sim.json son los de v1.0.0.
+Qué iones se resuelven lo decide electrolito.py (sin FEniCS).
+
 cfg (todas las claves resueltas; lo arman preguntas.py o solver.py-batch):
     input_dir, m_name          carpeta y nombre base de la malla
     T, eps_r                   condiciones del medio
-    sal                        dict completo (schema de sales.json)
-    c0_mM                      concentración bulk [mM] (simétrica)
+    El electrolito llega de UNA de dos formas (ver electrolito.iones_de_cfg):
+      · binario (paper):
+        salt                   dict completo (schema de sales.json)
+        c0_mM                  concentración bulk de la sal [mM] (simétrica)
+      · mezcla de N iones:
+        ions                   [{"symbol", "z", "D_m2s", "c0_mM"}] (c0 de cada
+                               ion en el bulk; Σ z·c0 = 0)
+        electrolyte            [{"salt", "c0_mM"}] (informativo, va al _sim.json)
+        electrolyte_label      etiqueta de los archivos ("KCl_100mM+HCl_10mM")
     sigma_Cm2                  carga superficial [C/m²]
     aplicar_carga_coronas      bool
     films                      [{"name": lado, "type": str,
@@ -43,6 +56,7 @@ from constantes import (
     TOL_EQUILIBRIO, TOL_VOLTAJE, N_STEPS_FILM, MAX_SUBDIVISIONES,
     NEWTON_MIN_ITER_VOLTAJE, EQ_DIR,
 )
+from electrolito import iones_de_cfg, donnan_psi
 
 
 # =============================================================================
@@ -115,8 +129,9 @@ def construir_films_activos(meta_geo, tags):
             "rho_fix":       Constant(0.0),   # Constant que se rampa de 0 a rho_target
             "c_fix_eq":      None,            # [mol/m³]
             "phi_D_anal_mV": None,            # Donnan analítico [mV]
-            "cK_film_anal":  None,            # [mol/m³]
-            "cCl_film_anal": None,            # [mol/m³]
+            "cK_film_anal":  None,            # [mol/m³] (catión, modo binario)
+            "cCl_film_anal": None,            # [mol/m³] (anión, modo binario)
+            "c_film_anal":   None,            # {símbolo: [mol/m³]} (modo general)
         })
     return films
 
@@ -145,8 +160,8 @@ def resolver(cfg):
     OUTPUT_DIR = cfg["output_dir"]
     T          = cfg["T"]
     eps_r      = cfg["eps_r"]
-    sal        = cfg["salt"]
-    c0_mM      = cfg["c0_mM"]
+    sal        = cfg.get("salt")        # None en modo mezcla
+    c0_mM      = cfg.get("c0_mM")       # None en modo mezcla
     sigma_Cm2  = cfg["sigma_Cm2"]
     aplicar_carga_coronas = cfg["apply_charge_rings"]
     V_max_V    = cfg["V_max_V"]
@@ -168,8 +183,10 @@ def resolver(cfg):
     tol_voltaje = (float(cfg.get("tol_voltage_abs", TOL_VOLTAJE[0])),
                    float(cfg.get("tol_voltage_rel", TOL_VOLTAJE[1])))
 
-    z_p, z_m = sal["cation"]["z"],     sal["anion"]["z"]
-    D_p, D_m = sal["cation"]["D_m2s"], sal["anion"]["D_m2s"]
+    # Iones del electrolito, en el orden de las componentes u_i de U.
+    # modo_general=False → binario del paper (sal simétrica): todo como v1.0.0.
+    # etiqueta_c → nombres de archivo ("KCl_100.0mM" en binario, igual que v1.0.0).
+    iones, modo_general, etiqueta_c = iones_de_cfg(cfg)
 
     voltajes_pos = np.linspace(0.0,  V_max_V, n_steps)[1:]
     voltajes_neg = np.linspace(0.0, -V_max_V, n_steps)[1:]
@@ -238,7 +255,11 @@ def resolver(cfg):
 
     # Derivados físicos universales
     epsilon = EPS_0 * eps_r
-    c0      = c0_mM   # concentración de referencia [mM]
+
+    print(f"  [6.2] Electrolyte ({'general' if modo_general else 'binary'}, "
+          f"{len(iones)} ions): " +
+          ", ".join(f"{i['symbol']}(z={int(i['z']):+d}, D={i['D_m2s']:.2e}, c0={i['c0_mM']:g} mM)"
+                    for i in iones))
 
     # -------------------------------------------------------------------------
     # 6.3 — Cálculos físicos de cada film (densidad de carga + Donnan analítico)
@@ -248,16 +269,28 @@ def resolver(cfg):
         f_dict["rho_target"] = f_dict["n_e_per_nm3"] * E_CHARGE * 1e27   # [C/m³]
         f_dict["c_fix_eq"]   = f_dict["rho_target"] / F_CONST            # [mol/m³]
 
-        # Equilibrio de Donnan analítico (sin voltaje), como referencia
+        # Equilibrio de Donnan (sin voltaje), como referencia
         #   film positivo → φ_D > 0 ; film negativo → φ_D < 0
-        c_bulk_SI  = c0   # [mM]
-        phi_D_anal = (R_GAS * T / F_CONST) * np.arcsinh(f_dict["c_fix_eq"] / (2 * c_bulk_SI))
-        f_dict["phi_D_anal_mV"] = phi_D_anal * 1e3
+        if not modo_general and iones[0]["z"] == 1 and iones[1]["z"] == -1:
+            # Sal 1:1: la fórmula analítica del paper, sin cambios
+            c_bulk_SI  = c0_mM   # [mM]
+            phi_D_anal = (R_GAS * T / F_CONST) * np.arcsinh(f_dict["c_fix_eq"] / (2 * c_bulk_SI))
+            f_dict["phi_D_anal_mV"] = phi_D_anal * 1e3
 
-        # Concentraciones analíticas en el film (Donnan):
-        #   c_i^film = c_i^bulk * exp(-z_i F φ_D / RT)
-        f_dict["cK_film_anal"]  = c_bulk_SI * np.exp(-1    * F_CONST * phi_D_anal / (R_GAS * T))
-        f_dict["cCl_film_anal"] = c_bulk_SI * np.exp(-(-1) * F_CONST * phi_D_anal / (R_GAS * T))
+            # Concentraciones analíticas en el film (Donnan):
+            #   c_i^film = c_i^bulk * exp(-z_i F φ_D / RT)
+            f_dict["cK_film_anal"]  = c_bulk_SI * np.exp(-1    * F_CONST * phi_D_anal / (R_GAS * T))
+            f_dict["cCl_film_anal"] = c_bulk_SI * np.exp(-(-1) * F_CONST * phi_D_anal / (R_GAS * T))
+        else:
+            # z:z con |z| > 1 o modo general: Donnan numérico
+            # (Σ z_i·c0_i·exp(−z_i·ψ) + c_fix = 0 dentro del film)
+            psi_D = donnan_psi(iones, f_dict["c_fix_eq"])
+            f_dict["phi_D_anal_mV"] = psi_D * (R_GAS * T / F_CONST) * 1e3
+            c_film = [i["c0_mM"] * np.exp(-i["z"] * psi_D) for i in iones]
+            if modo_general:
+                f_dict["c_film_anal"] = {i["symbol"]: c for i, c in zip(iones, c_film)}
+            else:
+                f_dict["cK_film_anal"], f_dict["cCl_film_anal"] = c_film
 
         print(f"  Film '{f_dict['name']}' ({f_dict['type']}): "
               f"n_e={f_dict['n_e_per_nm3']:.3f} e/nm³ → "
@@ -270,12 +303,14 @@ def resolver(cfg):
     # -------------------------------------------------------------------------
     # 6.4 — Formulación variacional (sistema PNP, con término de film opcional)
     # -------------------------------------------------------------------------
+    # Espacio mixto: φ + una variable logarítmica u_i por ion → (1 + N) campos.
+    # Con 2 iones es el P1×P1×P1 (φ, up, um) del paper.
     P1 = FiniteElement('P', mesh.ufl_cell(), GRADO_ELEMENTO)
-    V  = FunctionSpace(mesh, MixedElement([P1, P1, P1]))
+    V  = FunctionSpace(mesh, MixedElement([P1] * (1 + len(iones))))
 
-    U                 = Function(V)
-    phi, up, um       = split(U)
-    v_phi, v_up, v_um = TestFunctions(V)
+    U          = Function(V)
+    phi, *us   = split(U)
+    v_phi, *vs = TestFunctions(V)
 
     # Coordenada radial para integración axisimétrica (factor r)
     x_coord = SpatialCoordinate(mesh)
@@ -294,14 +329,19 @@ def resolver(cfg):
                 print(f"  [WARNING] Film '{f_dict['name']}' not detected in the mesh!")
 
     # Concentraciones: variables logarítmicas → concentración lineal
-    cp = c0 * exp(up)
-    cm = c0 * exp(um)
+    #   c_i = c0_i · exp(u_i)   (binario: cp = c0·exp(up), cm = c0·exp(um))
+    cs = [ion["c0_mM"] * exp(u) for ion, u in zip(iones, us)]
 
     sigma_val = Constant(0.0)   # se rampa en la ETAPA 1
 
     # Ecuación de Poisson
+    # ρ = F · Σ z_i c_i, acumulado término a término: con 2 iones es la misma
+    # expresión F·(z_p·cp + z_m·cm) del paper.
     f_pois = (epsilon * R_GAS * T) / F_CONST
-    rho    = F_CONST * (z_p * cp + z_m * cm)
+    suma_zc = iones[0]["z"] * cs[0]
+    for ion, c_i in zip(iones[1:], cs[1:]):
+        suma_zc = suma_zc + ion["z"] * c_i
+    rho    = F_CONST * suma_zc
 
     carga_ds = ds(tags_carga[0])
     for t in tags_carga[1:]:
@@ -317,29 +357,32 @@ def resolver(cfg):
     for f_dict in films_activos:
         F_pois += - f_dict["rho_fix"] * v_phi * r * dx(f_dict["tag_domain"])
 
-    # Ecuaciones de Nernst-Planck
-    J_p = -D_p * cp * (grad(up) + z_p * grad(phi))
-    J_m = -D_m * cm * (grad(um) + z_m * grad(phi))
+    # Ecuaciones de Nernst-Planck, una por ion:  J_i = −D_i c_i (∇u_i + z_i ∇φ)
+    Js = [-ion["D_m2s"] * c_i * (grad(u) + ion["z"] * grad(phi))
+          for ion, c_i, u in zip(iones, cs, us)]
 
-    F_np    = (dot(J_p, grad(v_up)) + dot(J_m, grad(v_um))) * r * dx
+    suma_np = dot(Js[0], grad(vs[0]))
+    for J_i, v_i in zip(Js[1:], vs[1:]):
+        suma_np = suma_np + dot(J_i, grad(v_i))
+    F_np    = suma_np * r * dx
     F_total = F_pois + F_np
 
     print(f"  [6.4] PNP formulation assembled "
-          f"(films: {len(films_activos)} → {[f['name'] for f in films_activos]})")
+          f"({1 + len(iones)} fields: φ + {len(iones)} ions | "
+          f"films: {len(films_activos)} → {[f['name'] for f in films_activos]})")
 
     # -------------------------------------------------------------------------
     # 6.5 — Condiciones de borde y configuración del solver Newton
     # -------------------------------------------------------------------------
+    # Reservorios: φ = V (INLET) / 0 (OUTLET) y u_i = 0 (c_i = c0_i) en ambos.
+    # Mismo orden que el paper: INLET (φ, u_1..u_N), después OUTLET.
     bc_phi_in = Expression("val", val=0.0, degree=0)
 
-    bcs = [
-        DirichletBC(V.sub(0), bc_phi_in,     boundaries, tags["INLET"]),
-        DirichletBC(V.sub(1), Constant(0.0), boundaries, tags["INLET"]),
-        DirichletBC(V.sub(2), Constant(0.0), boundaries, tags["INLET"]),
-        DirichletBC(V.sub(0), Constant(0.0), boundaries, tags["OUTLET"]),
-        DirichletBC(V.sub(1), Constant(0.0), boundaries, tags["OUTLET"]),
-        DirichletBC(V.sub(2), Constant(0.0), boundaries, tags["OUTLET"]),
-    ]
+    bcs = []
+    for nombre_tag, bc_phi in (("INLET", bc_phi_in), ("OUTLET", Constant(0.0))):
+        bcs.append(DirichletBC(V.sub(0), bc_phi, boundaries, tags[nombre_tag]))
+        for k in range(1, len(iones) + 1):
+            bcs.append(DirichletBC(V.sub(k), Constant(0.0), boundaries, tags[nombre_tag]))
 
     problema   = NonlinearVariationalProblem(F_total, U, bcs, derivative(F_total, U))
     solver_nls = NonlinearVariationalSolver(problema)
@@ -354,12 +397,13 @@ def resolver(cfg):
     # -------------------------------------------------------------------------
     def calcular_corriente(sol):
         """Calcula I_in e I_out en nA. Factor 2π por simetría axial."""
-        s_phi, s_up, s_um = split(sol)
-        s_cp    = c0 * exp(s_up)
-        s_cm    = c0 * exp(s_um)
-        J_p_sol = -D_p * s_cp * (grad(s_up) + z_p * grad(s_phi))
-        J_m_sol = -D_m * s_cm * (grad(s_um) + z_m * grad(s_phi))
-        J_e     = F_CONST * (z_p * J_p_sol + z_m * J_m_sol)
+        s_phi, *s_us = split(sol)
+        suma_zJ = None
+        for ion, s_u in zip(iones, s_us):
+            s_c   = ion["c0_mM"] * exp(s_u)
+            J_sol = -ion["D_m2s"] * s_c * (grad(s_u) + ion["z"] * grad(s_phi))
+            suma_zJ = ion["z"] * J_sol if suma_zJ is None else suma_zJ + ion["z"] * J_sol
+        J_e     = F_CONST * suma_zJ
         n       = FacetNormal(mesh)
         I_in  = assemble(dot(J_e, n) * FACTOR_AXISIM * r * ds(tags["INLET"]))  * A_TO_NA
         I_out = assemble(dot(J_e, n) * FACTOR_AXISIM * r * ds(tags["OUTLET"])) * A_TO_NA
@@ -400,9 +444,9 @@ def resolver(cfg):
     # 6.7 — Ejecución: 3 etapas (rampa σ → rampa ρ_film → barrido de voltaje)
     # -------------------------------------------------------------------------
     os.makedirs(OUTPUT_DIR, exist_ok=True)
-    archivo_h5   = os.path.join(OUTPUT_DIR, f"Solutions_{m_name}_{sal['name']}_{c0_mM}mM.h5")
-    archivo_txt  = os.path.join(OUTPUT_DIR, f"IV_curve_{m_name}_{sal['name']}_{c0_mM}mM.txt")
-    archivo_json = os.path.join(OUTPUT_DIR, f"Solutions_{m_name}_{sal['name']}_{c0_mM}mM_sim.json")
+    archivo_h5   = os.path.join(OUTPUT_DIR, f"Solutions_{m_name}_{etiqueta_c}.h5")
+    archivo_txt  = os.path.join(OUTPUT_DIR, f"IV_curve_{m_name}_{etiqueta_c}.txt")
+    archivo_json = os.path.join(OUTPUT_DIR, f"Solutions_{m_name}_{etiqueta_c}_sim.json")
 
     hdf = HDF5File(mesh.mpi_comm(), archivo_h5, "w")
     hdf.write(mesh, "/malla")
@@ -419,17 +463,32 @@ def resolver(cfg):
     # definen el equilibrio; solo se reutiliza si coinciden EXACTO.
     # Las difusividades NO entran en la clave: en equilibrio el flujo es cero y
     # la solución no depende de D (sí de las valencias z).
+    # Modo general: la clave lleva la lista de iones (z, c0) EN ORDEN, porque el
+    # orden fija qué componente de U es cada ion. Modo binario: la clave de
+    # v1.0.0, sin cambios (los checkpoints existentes siguen sirviendo).
     # -------------------------------------------------------------------------
-    params_eq = {
-        "m_name": m_name, "input_dir": INPUT_DIR,
-        "n_nodos": int(mesh.num_vertices()), "n_celdas": int(mesh.num_cells()),
-        "c0_mM": float(c0_mM), "sigma_Cm2": float(sigma_Cm2),
-        "rings": bool(aplicar_carga_coronas),
-        "T": float(T), "eps_r": float(eps_r),
-        "z_p": float(z_p), "z_m": float(z_m),
-        "films": [{"name": f["name"], "type": str(f["type"]),
-                   "rho_target": float(f["rho_target"])} for f in films_activos],
-    }
+    if not modo_general:
+        params_eq = {
+            "m_name": m_name, "input_dir": INPUT_DIR,
+            "n_nodos": int(mesh.num_vertices()), "n_celdas": int(mesh.num_cells()),
+            "c0_mM": float(c0_mM), "sigma_Cm2": float(sigma_Cm2),
+            "rings": bool(aplicar_carga_coronas),
+            "T": float(T), "eps_r": float(eps_r),
+            "z_p": float(iones[0]["z"]), "z_m": float(iones[1]["z"]),
+            "films": [{"name": f["name"], "type": str(f["type"]),
+                       "rho_target": float(f["rho_target"])} for f in films_activos],
+        }
+    else:
+        params_eq = {
+            "m_name": m_name, "input_dir": INPUT_DIR,
+            "n_nodos": int(mesh.num_vertices()), "n_celdas": int(mesh.num_cells()),
+            "ions": [{"z": float(i["z"]), "c0_mM": float(i["c0_mM"])} for i in iones],
+            "sigma_Cm2": float(sigma_Cm2),
+            "rings": bool(aplicar_carga_coronas),
+            "T": float(T), "eps_r": float(eps_r),
+            "films": [{"name": f["name"], "type": str(f["type"]),
+                       "rho_target": float(f["rho_target"])} for f in films_activos],
+        }
 
     def _buscar_checkpoint_eq():
         """Busca en EQ_DIR un checkpoint cuyo .json coincida EXACTO con params_eq."""
@@ -453,7 +512,7 @@ def resolver(cfg):
         """Guarda U_eq + params_eq en EQ_DIR (nombre legible + hash corto)."""
         os.makedirs(EQ_DIR, exist_ok=True)
         h8 = hashlib.md5(json.dumps(params_eq, sort_keys=True).encode()).hexdigest()[:8]
-        base = os.path.join(EQ_DIR, f"eq_{m_name}_{sal['name']}_{c0_mM}mM_{h8}")
+        base = os.path.join(EQ_DIR, f"eq_{m_name}_{etiqueta_c}_{h8}")
         h5out = HDF5File(mesh.mpi_comm(), base + ".h5", "w")
         h5out.write(U_eq, "/U_zero")
         h5out.close()
@@ -715,10 +774,12 @@ def resolver(cfg):
         "simulation": {
             # Bloque coherente de la sal (del catálogo o custom): toda la
             # info de la sal viaja junta y los módulos la leen como una unidad.
+            # Modo general: "c0_mM" = null a propósito (no hay UNA c0 por ion):
+            # un lector binario falla en vez de usar una c0 equivocada.
             "salt":          sal,
-            "c0_mM":        c0_mM,
-            "c0_inlet_mM":  c0_mM,
-            "c0_outlet_mM": c0_mM,
+            "c0_mM":        None if modo_general else c0_mM,
+            "c0_inlet_mM":  None if modo_general else c0_mM,
+            "c0_outlet_mM": None if modo_general else c0_mM,
             "sigma_Cm2":    sigma_Cm2,
             "T_K":          T,
             "eps_r":        eps_r,
@@ -729,25 +790,38 @@ def resolver(cfg):
             # (1e-12, 1e-8), que no convergía los pasos de voltaje).
             "tol_voltage_abs": tol_voltaje[0],
             "tol_voltage_rel": tol_voltaje[1],
+            # Iones en el ORDEN de las componentes de U = (φ, u_1, ..., u_N):
+            # es lo que necesita quien lea el .h5 para armar el espacio mixto
+            # con 1 + N campos (binario: N = 2, el P1×P1×P1 de siempre).
+            "ions":          iones,
         }
     }
+    if modo_general:
+        sim_json["simulation"]["electrolyte"] = (
+            cfg.get("electrolyte") or
+            ([{"salt": sal["name"], "c0_mM": c0_mM}] if sal else None))
+        sim_json["simulation"]["electrolyte_label"] = etiqueta_c
 
     # Lista de films activos (vacía si no hay films). Cada entrada lleva su
     # lado, tipo y parámetros físicos derivados. El orden refleja el orden de
     # rampa.
-    sim_json["simulation"]["films"] = [
-        {
+    def _film_json(f_dict):
+        d = {
             "side":                f_dict["name"],
             "type":                f_dict["type"],
             "n_e_per_nm3":         f_dict["n_e_per_nm3"],
             "rho_fix_target_Cm3":  f_dict["rho_target"],
             "c_fix_eq_molm3":      f_dict["c_fix_eq"],
             "phi_D_anal_mV":       f_dict["phi_D_anal_mV"],
-            "cK_film_anal_molm3":  f_dict["cK_film_anal"],
-            "cCl_film_anal_molm3": f_dict["cCl_film_anal"],
         }
-        for f_dict in films_activos
-    ]
+        if modo_general:
+            d["c_film_anal_molm3"]   = f_dict["c_film_anal"]
+        else:
+            d["cK_film_anal_molm3"]  = f_dict["cK_film_anal"]
+            d["cCl_film_anal_molm3"] = f_dict["cCl_film_anal"]
+        return d
+
+    sim_json["simulation"]["films"] = [_film_json(f_dict) for f_dict in films_activos]
 
     with open(archivo_json, "w") as f:
         json.dump(sim_json, f, indent=2)

@@ -240,3 +240,67 @@ def solver_run_fine(repo_root, tmp_path_factory):
         "iv": iv,
         "sim_json": out_dir / f"Solutions_{_STEM_LESS}_sim.json",
     }
+
+
+# --- Mixture runs (v1.1.0, N ions) ---------------------------------------------
+# KCl 100 mM + HCl 10 mM is a 3-ion mixture (K+ 100, Cl- 110, H+ 10 mM). K+ and
+# H+ have the same valence and the same bulk ratio in both reservoirs, so the
+# ratio c_H/c_K stays uniform and the mixture IS a binary salt of 110 mM whose
+# cation has D_eff = (c_K*D_K + c_H*D_H)/(c_K + c_H). The two runs below solve
+# that same physics with 4 fields and with 3 fields.
+_MIX_ELECTROLYTE = [{"salt": "KCl", "c0_mM": 100}, {"salt": "HCl", "c0_mM": 10}]
+_STEM_MIX = "demo-conical_KCl_100mM+HCl_10mM"
+_STEM_EFF = "demo-conical_Keff_110.0mM"
+
+
+def _params_mezcla(repo_root, binario=False):
+    """Golden params with the mixture, or with the equivalent binary salt."""
+    import json
+
+    data = repo_root / "tests" / "data"
+    params = json.loads((data / _PARAMS_LESS).read_text(encoding="utf-8"))
+    del params["salt"], params["c0_mM"]
+    if not binario:
+        params["electrolyte"] = _MIX_ELECTROLYTE
+        return params
+    sales = json.loads((repo_root / "2_solver" / "sales.json")
+                       .read_text(encoding="utf-8"))["salts"]
+    D_K = sales["KCl"]["cation"]["D_m2s"]
+    D_H = sales["HCl"]["cation"]["D_m2s"]
+    params["salt"] = {
+        "name": "Keff",
+        "cation": {"symbol": "K+H", "z": 1, "D_m2s": (100 * D_K + 10 * D_H) / 110},
+        "anion": dict(sales["KCl"]["anion"]),
+        "soluble": True, "Ksp_M2": None,
+    }
+    params["c0_mM"] = 110.0
+    return params
+
+
+@pytest.fixture(scope="session")
+def solver_run_mixture(repo_root, tmp_path_factory):
+    """KCl 100 + HCl 10 mM on the film-less demo mesh (U = phi + 3 ions)."""
+    if not _fenics_importable():
+        pytest.skip("FEniCS not usable in this environment (see T1 _require notes)")
+    out_dir = tmp_path_factory.mktemp("solver_mix_out")
+    proc = _run_solver(repo_root, out_dir, repo_root / "tests" / "data" / _MESH_LESS,
+                       _params_mezcla(repo_root))
+    iv = out_dir / f"IV_curve_{_STEM_MIX}.txt"
+    assert iv.is_file(), \
+        f"solver did not produce the I-V curve.\nstdout tail:\n{proc.stdout[-1500:]}"
+    return {"dir": out_dir, "iv": iv, "h5": out_dir / f"Solutions_{_STEM_MIX}.h5",
+            "sim_json": out_dir / f"Solutions_{_STEM_MIX}_sim.json"}
+
+
+@pytest.fixture(scope="session")
+def solver_run_effective_salt(repo_root, tmp_path_factory):
+    """The binary salt equivalent to `solver_run_mixture` (110 mM, D_eff)."""
+    if not _fenics_importable():
+        pytest.skip("FEniCS not usable in this environment (see T1 _require notes)")
+    out_dir = tmp_path_factory.mktemp("solver_eff_out")
+    proc = _run_solver(repo_root, out_dir, repo_root / "tests" / "data" / _MESH_LESS,
+                       _params_mezcla(repo_root, binario=True))
+    iv = out_dir / f"IV_curve_{_STEM_EFF}.txt"
+    assert iv.is_file(), \
+        f"solver did not produce the I-V curve.\nstdout tail:\n{proc.stdout[-1500:]}"
+    return {"dir": out_dir, "iv": iv}

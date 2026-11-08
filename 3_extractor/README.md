@@ -53,10 +53,18 @@ Each module reads, from the solution folder:
 
 | File | For what |
 |---|---|
-| `Solutions_<...>.h5` | mesh + U(φ, ln c₊, ln c₋) per voltage |
-| `Solutions_<...>_sim.json` | c0, salt, films, channel (z_tip/z_base, R) — metadata |
+| `Solutions_<...>.h5` | mesh + U(φ, ln c₊, ln c₋) per voltage (one ln cᵢ per ion for a mixture) |
+| `Solutions_<...>_sim.json` | c0, salt, ions, films, channel (z_tip/z_base, R) — metadata |
 
 Without the sibling `_sim.json`, the extractor aborts with a clear message.
+
+**Mixtures of salts (v1.1.0).** `porosim_comun` builds the function space from
+`simulation.ions` (1 + N fields; a `_sim.json` written by v1.0.0 has no `ions`
+and is read as the binary salt it is). For a mixture, or an asymmetric salt,
+the potential map, the field lines, the axial potential profile, the summary
+and the I-V work; the concentration modules (ion maps, ion profiles,
+cross-section average, precipitation) answer `aplica() = False`, because they
+draw one cation/anion pair with a single c0.
 
 ## Modules
 

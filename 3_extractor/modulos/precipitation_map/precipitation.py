@@ -91,8 +91,11 @@ def aplica(meta):
     consulta para no listar el módulo cuando la sal es totalmente soluble.
 
     _sim.json viejos (sin bloque "salt") → True, para no ocultar el módulo en
-    soluciones previas a la introducción del catálogo de sales.
+    soluciones previas a la introducción del catálogo de sales. Una mezcla
+    (v1.1.0) → False: Q = a+·a− supone el par catión/anión de UNA sal.
     """
+    if not pc.aplica_binaria(meta):
+        return False
     sal = meta.get("simulation", {}).get("salt")
     if sal is None:
         return True
@@ -178,8 +181,11 @@ def preparar(ruta_solucion, v_label=None, sol=None):
     (aplica() = False: el mapa no tiene sentido físico)."""
     meta_previa = (sol["meta"] if sol is not None
                    else pc.cargar_meta(pathlib.Path(ruta_solucion).parent))
+    if not pc.aplica_binaria(meta_previa):
+        pc.exigir_binaria(meta_previa)          # prints why (mixture / no c0)
+        return None
     if not aplica(meta_previa):
-        sal_nombre = meta_previa.get("simulation", {}).get("salt", {}).get("name", "?")
+        sal_nombre = (meta_previa.get("simulation", {}).get("salt") or {}).get("name", "?")
         print(f"  [NOTE] '{sal_nombre}' is a fully soluble salt: it does not "
               f"precipitate. This module does not apply.")
         return None
@@ -189,8 +195,7 @@ def preparar(ruta_solucion, v_label=None, sol=None):
     if prep is None:
         return None
     sol, ctx, campos = prep
-    if sol["meta"].get("simulation", {}).get("c0_mM") is None:
-        print("❌ Missing 'c0_mM' in the _sim.json simulation.")
+    if not pc.exigir_binaria(sol["meta"]):
         return None
 
     sal = ctx["salt"]

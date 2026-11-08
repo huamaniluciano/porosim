@@ -88,7 +88,9 @@ st.caption("I-V curve of the full sweep and internal physics of the nanopore "
 @st.cache_resource(max_entries=3, show_spinner="Loading FEniCS mesh from the .h5 ...")
 def cargar_malla(h5_path, mtime):
     mesh = pc.cargar_malla(h5_path)
-    return {"mesh": mesh, "V": pc.espacio_mixto(mesh)}
+    # 1 + N campos: N = número de iones del _sim.json (2 en binario)
+    sim_h5 = pc.cargar_meta(pathlib.Path(h5_path).parent).get("simulation", {})
+    return {"mesh": mesh, "V": pc.espacio_mixto(mesh, len(pc.iones_de_sim(sim_h5)))}
 
 
 @st.cache_data(max_entries=6)
@@ -322,10 +324,11 @@ if not meta:
 stem = ruta_solucion.stem
 ctx  = pc.contexto_de(meta, stem)           # contexto base (sin voltaje aún)
 sal   = ctx["salt"]
-c0    = ctx["c0"]
+c0    = ctx["c0"]          # None en una mezcla (no hay UNA c0)
 T_K   = ctx["T_K"]
 V_T   = ctx["V_T"]
 films = ctx["films"]
+binaria = ctx["binaria"]   # False → solo las vistas de potencial (v1.1.0)
 
 with st.sidebar:
     st.header("2. Run metadata")
@@ -336,10 +339,15 @@ with st.sidebar:
         lineas.append(f"- D_tip = {meta['R_tip']*2e9:.1f} nm · "
                       f"D_base = {meta.get('R_base', 0)*2e9:.1f} nm · "
                       f"L_pore = {meta.get('L_pore', 0)*1e9:.0f} nm")
-    lineas.append(f"**Electrolyte**: {sal['name']} · {c0:g} mM"
-                  + (" *(legacy)*" if sal["legacy"] else ""))
-    lineas.append(f"- {sal['label_p']} / {sal['label_m']} · T = {T_K:g} K · "
-                  f"ε_r = {sim.get('eps_r', '?')}")
+    if binaria:
+        lineas.append(f"**Electrolyte**: {sal['name']} · {c0:g} mM"
+                      + (" *(legacy)*" if sal["legacy"] else ""))
+        lineas.append(f"- {sal['label_p']} / {sal['label_m']} · T = {T_K:g} K · "
+                      f"ε_r = {sim.get('eps_r', '?')}")
+    else:
+        lineas.append(f"**Electrolyte**: {pc.describir_electrolito(sim)}")
+        lineas.append(f"- {len(ctx['ions'])} ions · T = {T_K:g} K · "
+                      f"ε_r = {sim.get('eps_r', '?')}")
     if sal["soluble"] is False and sal["Ksp_M2"] is not None:
         lineas.append(f"- Sparingly soluble · Ksp = {sal['Ksp_M2']:.2e} M²")
     if sigma_Cm2 is not None:
@@ -475,9 +483,15 @@ with tab_global:
                 f"File: {ruta_solucion.name}",
                 f"Folder: {carpeta_sol}",
                 f"Mesh:    {meta.get('m_name', stem)} ({meta.get('channel_type', '?')})",
-                f"Salt:    {sal['name']} | c0 = {c0:g} mM | T = {T_K:g} K | ε_r = {sim.get('eps_r', '?')}",
-                f"Ions:    {sal['label_p']} (z={sal['z_p']}) / {sal['label_m']} (z={sal['z_m']})"
             ]
+            if binaria:
+                lineas_rep += [
+                    f"Salt:    {sal['name']} | c0 = {c0:g} mM | T = {T_K:g} K | ε_r = {sim.get('eps_r', '?')}",
+                    f"Ions:    {sal['label_p']} (z={sal['z_p']}) / {sal['label_m']} (z={sal['z_m']})"]
+            else:
+                lineas_rep += [
+                    f"Electrolyte: {pc.describir_electrolito(sim)} | T = {T_K:g} K | ε_r = {sim.get('eps_r', '?')}",
+                    "Ions:    " + ", ".join(f"{i.get('symbol')} (z={i.get('z')})" for i in ctx["ions"])]
             if meta.get("R_tip") is not None:
                 lineas_rep.append(f"Geometry: D_tip = {meta['R_tip']*2e9:.1f} nm, D_base = {meta.get('R_base', 0)*2e9:.1f} nm, L = {meta.get('L_pore', 0)*1e9:.0f} nm")
             lineas_rep.append(f"Points in I-V sweep: {len(V_arr)}")
@@ -524,16 +538,23 @@ with tab_local:
         )
         st.divider()
 
-        sub_nombres = ["📉 1D profiles in the channel",
-                       "🗺 2D potential + field", "🧂 2D concentration maps"]
+        VISTA_PERFILES, VISTA_POT = "📉 1D profiles in the channel", "🗺 2D potential + field"
+        VISTA_IONES, VISTA_PRECIP = "🧂 2D concentration maps", "💎 Precipitation (Davies)"
+        sub_nombres = [VISTA_PERFILES, VISTA_POT]
+        if binaria:
+            sub_nombres.append(VISTA_IONES)
         hay_precip = precipitation.aplica(meta)
         if hay_precip:
-            sub_nombres.append("💎 Precipitation (Davies)")
+            sub_nombres.append(VISTA_PRECIP)
+        if not binaria:
+            st.caption("Mixture of ions: this version draws its potential "
+                       "(2D map, field lines, axial profile) and its I-V. The "
+                       "concentration views need a binary electrolyte.")
         vista = st.radio("View", sub_nombres, horizontal=True,
                          label_visibility="collapsed", key="vista_local")
 
         # ── B.1: PERFILES 1D EN EL CANAL ────────────────────────────────────
-        if vista == sub_nombres[0]:
+        if vista == VISTA_PERFILES:
             tab_axial, tab_prom = st.tabs(["📍 Central axis (r = 0)",
                                            "⭕ Cross-section average <c>(z)"])
 
@@ -542,9 +563,9 @@ with tab_local:
                 with st.form("form_perf_axial", border=True):
                     modo_ax = st.radio(
                         "Visualization mode at r=0",
-                        ["Concentration + Potential (2 stacked panels)",
-                         "Concentration only (ions)",
-                         "Potential only (φ(z))"],
+                        (["Concentration + Potential (2 stacked panels)",
+                          "Concentration only (ions)"] if binaria else [])
+                        + ["Potential only (φ(z))"],
                         horizontal=True
                     )
                     if "Concentration" in modo_ax:
@@ -568,10 +589,13 @@ with tab_local:
                     campos = extraer_campos(h5_path, mtime, v_label)
                     ai     = dm["axis_idx"]
                     phi_ax = campos["phi_adim"][ai] * V_T
-                    cp_ax  = c0 * np.exp(campos["up"][ai])
-                    cm_ax  = c0 * np.exp(campos["um"][ai])
-                    ct_ax  = cp_ax + cm_ax
                     z_axis = dm["z_nm"][ai]
+                    if binaria:
+                        cp_ax = c0 * np.exp(campos["up"][ai])
+                        cm_ax = c0 * np.exp(campos["um"][ai])
+                    else:   # mezcla: solo φ(z) (las columnas de iones quedan vacías)
+                        cp_ax = cm_ax = np.full_like(phi_ax, np.nan)
+                    ct_ax  = cp_ax + cm_ax
 
                     d_pot = {"z_axis_nm": z_axis, "phi_ax_V": phi_ax}
                     d_ion = {"z_axis_nm": z_axis, "cp_ax_mM": cp_ax,
@@ -600,10 +624,11 @@ with tab_local:
 
                     datos_axial = None
                     if pd is not None:
+                        columnas = {"z_nm": z_axis, "phi_V": phi_ax}
+                        if binaria:
+                            columnas.update(cation_mM=cp_ax, anion_mM=cm_ax, total_mM=ct_ax)
                         datos_axial = {
-                            "df": pd.DataFrame({"z_nm": z_axis, "phi_V": phi_ax,
-                                                "cation_mM": cp_ax, "anion_mM": cm_ax,
-                                                "total_mM": ct_ax}),
+                            "df": pd.DataFrame(columnas),
                             "header": f"Central Axis Profile r=0 | {v_label} V | {stem}"}
                     st.caption(f"📍 Central axis ($r=0$) with {len(z_axis)} axial mesh nodes.")
                     panel_grafico("perf_axial", dibujar_perf_axial, carpeta_sol,
@@ -611,51 +636,55 @@ with tab_local:
 
             # ── Promedio transversal <c>(z) ────────────────────────────────
             with tab_prom:
-                with st.form("form_perf_prom", border=True):
-                    curvas_prom = st.multiselect(
-                        "Ion species to average and show",
-                        ["Cation", "Anion", "Total ions"],
-                        default=["Cation", "Anion", "Total ions"]
-                    )
-                    btn_prom = st.form_submit_button(f"🧮 Compute and Plot ({v_label} V)", type="primary", use_container_width=True)
-
-                if btn_prom:
-                    st.session_state["v_calc__perf_prom"] = v_label
-
-                if st.session_state.get("v_calc__perf_prom") != v_label:
-                    st.info(f"👆 Selected voltage: **{v_label} V**. Adjust the options and click **🧮 Compute and Plot ({v_label} V)**.")
+                if not binaria:
+                    st.info("The cross-section average <c>(z) needs a binary "
+                            "electrolyte (cation/anion pair with one c0).")
                 else:
-                    ctxv   = ctx_v(v_label)
-                    dm     = datos_malla(h5_path, mtime)
-                    cp, cm = campos_mM(h5_path, mtime, v_label, c0)
-                    res_prom = perfil_concentracion_promedio(
-                        dm["z_nm"], dm["r_nm"], dm["tri"], cp, cm,
-                        meta.get("z_tip"), meta.get("z_base"),
-                        meta.get("R_tip"), meta.get("R_base"), c0)
+                    with st.form("form_perf_prom", border=True):
+                        curvas_prom = st.multiselect(
+                            "Ion species to average and show",
+                            ["Cation", "Anion", "Total ions"],
+                            default=["Cation", "Anion", "Total ions"]
+                        )
+                        btn_prom = st.form_submit_button(f"🧮 Compute and Plot ({v_label} V)", type="primary", use_container_width=True)
 
-                    if res_prom is None:
-                        st.warning("⚠️ Could not compute the cross-section average (missing cone geometry metadata in `_sim.json`).")
+                    if btn_prom:
+                        st.session_state["v_calc__perf_prom"] = v_label
+
+                    if st.session_state.get("v_calc__perf_prom") != v_label:
+                        st.info(f"👆 Selected voltage: **{v_label} V**. Adjust the options and click **🧮 Compute and Plot ({v_label} V)**.")
                     else:
-                        curvas = _curvas(curvas_prom)
+                        ctxv   = ctx_v(v_label)
+                        dm     = datos_malla(h5_path, mtime)
+                        cp, cm = campos_mM(h5_path, mtime, v_label, c0)
+                        res_prom = perfil_concentracion_promedio(
+                            dm["z_nm"], dm["r_nm"], dm["tri"], cp, cm,
+                            meta.get("z_tip"), meta.get("z_base"),
+                            meta.get("R_tip"), meta.get("R_base"), c0)
 
-                        def dibujar_perf_prom(leyenda, limpio):
-                            return perf_prom.crear_figura(res_prom, ctxv,
-                                                          curvas=curvas, leyenda=leyenda)
+                        if res_prom is None:
+                            st.warning("⚠️ Could not compute the cross-section average (missing cone geometry metadata in `_sim.json`).")
+                        else:
+                            curvas = _curvas(curvas_prom)
 
-                        datos_prom = None
-                        if pd is not None:
-                            datos_prom = {
-                                "df": pd.DataFrame({"z_nm": res_prom["z_nm"],
-                                                    "cation_prom_mM": res_prom["cp_prom"],
-                                                    "anion_prom_mM": res_prom["cm_prom"],
-                                                    "total_prom_mM": res_prom["ct_prom"]}),
-                                "header": f"Section Average Profile <c>(z) | {v_label} V | {stem}"}
-                        st.caption(f"⭕ Area-weighted cross-section average with {len(res_prom['z_nm'])} slices along z.")
-                        panel_grafico("perf_prom", dibujar_perf_prom, carpeta_sol,
-                                      f"{stem}_section_avg_{v_label}V", datos_prom)
+                            def dibujar_perf_prom(leyenda, limpio):
+                                return perf_prom.crear_figura(res_prom, ctxv,
+                                                              curvas=curvas, leyenda=leyenda)
+
+                            datos_prom = None
+                            if pd is not None:
+                                datos_prom = {
+                                    "df": pd.DataFrame({"z_nm": res_prom["z_nm"],
+                                                        "cation_prom_mM": res_prom["cp_prom"],
+                                                        "anion_prom_mM": res_prom["cm_prom"],
+                                                        "total_prom_mM": res_prom["ct_prom"]}),
+                                    "header": f"Section Average Profile <c>(z) | {v_label} V | {stem}"}
+                            st.caption(f"⭕ Area-weighted cross-section average with {len(res_prom['z_nm'])} slices along z.")
+                            panel_grafico("perf_prom", dibujar_perf_prom, carpeta_sol,
+                                          f"{stem}_section_avg_{v_label}V", datos_prom)
 
         # ── B.2: POTENCIAL 2D (+ LÍNEAS DE CAMPO) ───────────────────────────
-        elif vista == sub_nombres[1]:
+        elif vista == VISTA_POT:
             with st.form("form_pot_2d", border=True):
                 col_f1, col_f2 = st.columns(2)
                 with col_f1:
@@ -697,7 +726,7 @@ with tab_local:
                               f"{stem}_potential2D_{v_label}V")
 
         # ── B.3: MAPAS DE CONCENTRACIÓN 2D ──────────────────────────────────
-        elif vista == sub_nombres[2]:
+        elif vista == VISTA_IONES:
             with st.form("form_iones_2d", border=True):
                 especie_mapa = st.radio(
                     "Species or view to plot",
@@ -744,7 +773,7 @@ with tab_local:
                               f"{stem}_map2D_{especie_mapa.split(' ')[0]}_{v_label}V", datos_i)
 
         # ── B.4: PRECIPITACIÓN (DAVIES) — solo sales poco solubles ──────────
-        elif hay_precip and vista == sub_nombres[3]:
+        elif hay_precip and vista == VISTA_PRECIP:
             Kps = sal["Ksp_M2"]
             if Kps is None:
                 Kps = pc.KPS_LEGACY_M2
