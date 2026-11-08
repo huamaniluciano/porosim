@@ -81,6 +81,7 @@ def crear_figura(datos, ctx, especie="cation", leyenda=True,
     im = ax.tricontourf(z2, r2, tri2, c2, levels=niveles, cmap="jet", extend="both")
     cbar = fig.colorbar(im, ax=ax)
     cbar.set_label("Concentration [mM]")
+    pc.ticks_colorbar(cbar, niveles[0], niveles[-1])
     pc.marcar_colorbar(cbar)
 
     ax.set_aspect("equal")
@@ -144,6 +145,7 @@ def crear_figura_comparativo(datos, ctx, leyenda=True,
     cbar = fig.colorbar(im, ax=[ax_p, ax_m], orientation="horizontal",
                         fraction=0.05, pad=0.08)
     cbar.set_label("Concentration [mM]")
+    pc.ticks_colorbar(cbar, niveles[0], niveles[-1])
     pc.marcar_colorbar(cbar)
     return fig
 

@@ -463,10 +463,25 @@ def marcar_colorbar(cbar):
     return cbar
 
 
+def ticks_colorbar(cbar, vmin, vmax, nbins=10):
+    """~nbins ticks en múltiplos redondos, descartando los que caen fuera de
+    [vmin, vmax]. MaxNLocator devuelve múltiplos ALREDEDOR del intervalo sin
+    recortarlos y matplotlib dibuja los de afuera pegados al borde de la
+    barra, encimados con el tick vecino (números ilegibles)."""
+    from matplotlib.ticker import MaxNLocator
+    ticks = MaxNLocator(nbins=nbins).tick_values(vmin, vmax)
+    ticks = ticks[(ticks >= vmin) & (ticks <= vmax)]
+    cbar.set_ticks(ticks)
+    return ticks
+
+
 def limpiar_figura(fig):
-    """Imagen limpia para publicaciones: sin título, ejes, ticks ni bordes.
-    Las colorbars marcadas con marcar_colorbar() se preservan; el fondo (patch)
-    también, para que el gris de la membrana quede en la exportación."""
+    """Imagen limpia para publicaciones: sin título, labels de ejes, números
+    de ticks ni leyenda, pero con el marco y las marcas de los ticks en los 4
+    lados (la convención usual: la imagen queda limpia sin perder la
+    referencia de escala). Las colorbars marcadas con marcar_colorbar() se
+    preservan; el fondo (patch) también, para que el gris de la membrana
+    quede en la exportación."""
     fig.suptitle("")
     for ax in fig.axes:
         if getattr(ax, "_es_colorbar", False):
@@ -474,11 +489,13 @@ def limpiar_figura(fig):
         ax.set_title("")
         ax.set_xlabel("")
         ax.set_ylabel("")
-        ax.set_xticks([])
-        ax.set_yticks([])
+        ax.set_xticklabels([])
+        ax.set_yticklabels([])
+        ax.tick_params(top=True, right=True)
         ax.grid(False)
-        for spine in ax.spines.values():
-            spine.set_visible(False)
+        leyenda = ax.get_legend()
+        if leyenda is not None:
+            leyenda.remove()
     return fig
 
 
